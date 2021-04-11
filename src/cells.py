@@ -5,60 +5,84 @@ import torch.nn as nn
 from cell_operations import OPS
 
 
-_cache = 
+# TODO: reduce complexity inside net (HxW)
+# TODO: add shared weights
 
-class FullCell(nn.Module):
-    def __init__(self, C_in, C_out, genotype, search_space):
-        search_space = {'dil_conv_3x3','dil_conv_5x5','dil_conv_7x7','skip_connect','clinc_3x3':  ,'clinc_7x7':  ,'avg_pool_3x3',  'max_pool_3x3'}
-        
-        ops = seld._get_ops(OPS, search_space)
-        self.layers   = nn.ModuleList()
-
-    def _get_ops(self, OPS, to_use):
-        return {k:v for k,v in OPS.items() if k in to_use}
 
 class LearnableCell(nn.Module):
-    def __init__(self, C_in, C_out, genotype, search_space, shared_weights):
+    def __init__(self, C_in, genotype, search_space):
         super().__init__()
-        genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7  1|1|1|1|1|1|1|1'
-        search_space = {'dil_conv_3x3','dil_conv_5x5','dil_conv_7x7','skip_connect','clinc_3x3':  ,'clinc_7x7':  ,'avg_pool_3x3',  'max_pool_3x3'}
 
         # translate genotype
-        architecture, use_shared, _, stds = self._get_conf(genotype)
+        architecture, use_shared, _, stride, stds = self._get_conf(genotype)
 
         # check if genotype can be coded into phenotype
-        assert len(architecture[0]) == len(search_space), 'to code genotype into phenotype, search space lenght must be equal to genotype\'s'
-        assert int((len(architecture)*2)**0.5)*int((len(architecture)*2)**0.5+1)/2 == len(architecture), 'num of connection should be = n*(n+1)/2'
+        assert len(architecture[0]) == len(search_space)
+        depth = int((len(architecture)*2)**0.5)
+        assert depth * (depth+1) / 2 == len(architecture)
 
         # net_architecture:   layer_i reads from node_in_i
         self.genotype = genotype
-        self.layers   = None
-        self.node_in  = []
-
+        self.depth = depth
+        self.layers = nn.ModuleList()
+        self.node_in = []
+        self.node_out = []
+        self.size_in = [0 for _ in range(depth+1)]
+        self.size_in[0] = C_in
 
         # build net
-        if use_shared:
-            # share params with parent net
-            self.layers = shared_weights
-        else:
-            # initialize new parameters
-            self.layers = nn.ModuleList()
-            for i, conn in enumerate(arch.split('-')):
+        for i in range(1, depth+1):
+            for j in range(i):
+                print(int(i*(i-1)/2+j))
+                for op, c_out in zip(OPS.keys(), architecture[int(i*(i-1)/2+j)]):
+                    if c_out > 0:
+                        c_in = self.size_in[j]
+                        print('-->', c_in, c_out, 1)
+                        self.layers.append(
+                            OPS[op](c_in, c_out, 1, True))
+                        self.node_in.append(j)
+                        self.node_out.append(i)
+                        self.size_in[i] += c_out
+
+        print(self.size_in)
 
     def _get_conf(self, genotype):
         architecture, evol_strattegy = genotype.split('--')
-        architecture = [[int(x) for x in conn.split('|')]  for conn in architecture.split('  ')]
+        architecture = [[int(x) for x in conn.split('|')]
+                        for conn in architecture.split('  ')]
 
-        use_shared, dataset, stds = evol_strattegy.split('  ')
-        use_shared, dataset, stds = int(use_shared), int(dataset), [float(x) for x in stds.split('|')] 
-        return architecture, use_shared, dataset, stds
-    
+        use_shared, dataset, stride, stds = evol_strattegy.split('  ')
+        use_shared, dataset, stride = int(
+            use_shared), int(dataset), int(stride)
+        stds = [float(x) for x in stds.split('|')]
+        return architecture, use_shared, dataset, stride, stds
+
     def get_dataset_n(self):
         return int(self.genotype.split('--')[1].split('  ')[1])
 
+    def forward(self, x):
+        print('FORWARD')
+        inputs = [[] for _ in range(self.depth+1)]
+        inputs[0] = x
+        current = 1
+        for l_in, l_out, layer in zip(self.node_in, self.node_out, self.layers):
+            print('->', l_in, l_out)
+            if l_out != current:
+                inputs[current] = torch.cat(inputs[current], dim=1)
+                current = l_out
+            res = layer(inputs[l_in])
+            inputs[l_out].append(res)
+
+        return torch.cat(inputs[-1], dim=1)
 
 
-    
+if __name__ == '__main__':
+    genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7  1  1|1|1|1|1|1|1|1'
+    search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
+                    'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
 
+    net = LearnableCell(3, genotype, search_space)
 
-
+    x = torch.rand((16, 3, 32, 32))
+    y = net(x)
+    print(y.shape)
