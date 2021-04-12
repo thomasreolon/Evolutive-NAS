@@ -2,11 +2,10 @@ from collections import defaultdict
 import torch
 import torch.nn as nn
 
-from cell_operations import OPS
+from .cell_operations import OPS
 
 
-# TODO: reduce complexity inside net (HxW)
-# TODO: add shared weights
+_cache = {}
 
 
 class LearnableCell(nn.Module):
@@ -14,7 +13,7 @@ class LearnableCell(nn.Module):
         super().__init__()
 
         # translate genotype
-        architecture, use_shared, _, stride, stds = self._get_conf(genotype)
+        architecture, use_shared, _ = self._get_conf(genotype)
 
         # check if genotype can be coded into phenotype
         assert len(architecture[0]) == len(search_space)
@@ -30,6 +29,8 @@ class LearnableCell(nn.Module):
         self.size_in = [0 for _ in range(depth+1)]
         self.size_in[0] = C_in
 
+        self.pooling = nn.AvgPool2d((3, 3), stride=2)
+
         # build net
         for i in range(1, depth+1):
             for j in range(i):
@@ -38,12 +39,18 @@ class LearnableCell(nn.Module):
                     if c_out > 0:
                         c_in = self.size_in[j]
                         print('-->', c_in, c_out, 1)
-                        self.layers.append(
-                            OPS[op](c_in, c_out, 1, True))
+                        coded = f'{op}):{j}->{i}, {c_in}-{c_out}'
+                        if use_shared and coded in _cache:
+                            self.layers.append(_cache[coded])
+                        else:
+                            layer = OPS[op](c_in, c_out, 1, True)
+                            self.layers.append(layer)
+                            _cache[coded] = layer
                         self.node_in.append(j)
                         self.node_out.append(i)
                         self.size_in[i] += c_out
 
+        self.C_out = self.size_in[-1]
         print(self.size_in)
 
     def _get_conf(self, genotype):
@@ -51,11 +58,9 @@ class LearnableCell(nn.Module):
         architecture = [[int(x) for x in conn.split('|')]
                         for conn in architecture.split('  ')]
 
-        use_shared, dataset, stride, stds = evol_strattegy.split('  ')
-        use_shared, dataset, stride = int(
-            use_shared), int(dataset), int(stride)
-        stds = [float(x) for x in stds.split('|')]
-        return architecture, use_shared, dataset, stride, stds
+        use_shared, dataset = evol_strattegy.split('  ')
+        use_shared, dataset = int(use_shared), int(dataset)
+        return architecture, use_shared, dataset
 
     def get_dataset_n(self):
         return int(self.genotype.split('--')[1].split('  ')[1])
@@ -73,16 +78,5 @@ class LearnableCell(nn.Module):
             res = layer(inputs[l_in])
             inputs[l_out].append(res)
 
-        return torch.cat(inputs[-1], dim=1)
-
-
-if __name__ == '__main__':
-    genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7  1  1|1|1|1|1|1|1|1'
-    search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
-                    'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
-
-    net = LearnableCell(3, genotype, search_space)
-
-    x = torch.rand((16, 3, 32, 32))
-    y = net(x)
-    print(y.shape)
+        x = torch.cat(inputs[-1], dim=1)
+        return self.pooling(x)

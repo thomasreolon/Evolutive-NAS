@@ -108,14 +108,3 @@ class SkipConn(nn.Module):
         out = self.changech(x)
         out = self.bn(out)
         return out
-
-
-if __name__ == '__main__':
-    confs = {'C_in': 3, 'C_out': 8, 'stride': 1, 'affine': True}
-
-    for name, layer in OPS.items():
-        print('\ntrying layer', name)
-        net = layer(**confs)
-        x = torch.rand((16, confs['C_in'], 32, 32))
-        y = net(x)
-        print('output: ', y.shape,  'hash', hash(net))
