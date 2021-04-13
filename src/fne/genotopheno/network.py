@@ -21,7 +21,7 @@ class VisionNetwork(nn.Module):
         assert len(population) % depth == 0
         wide = int(len(population) / depth)
 
-        self.alphas = torch.ones((depth, wide), requires_grad=True)
+        self.alphas = nn.Parameter(torch.ones((depth, wide)))
         self.layers = nn.ModuleList()
         self.depth = depth
 
@@ -43,16 +43,21 @@ class VisionNetwork(nn.Module):
 
     def forward(self, x):
         inputs, wide = [x], int(len(self.layers)/self.depth)
+        weights = nn.functional.softmax(self.alphas, dim=1)
 
         for i in range(self.depth):
             tmp = []
             for j in range(wide):
                 cell = self.layers[i*self.depth+j]
-                res = cell(inputs[i])
-                tmp.append(res)
+                if weights[i,j]>0.01:
+                    res = cell(inputs[i]) * weights[i,j]
+                    tmp.append(res)
+                else:
+                    s = inputs[i].shape
+                    tmp.append(torch.zeros((s[0], cell.C_out, int((s[2]-1)/2), int((s[3]-1)/2))))
 
             tmp = torch.cat(tmp, dim=1)
             noise = torch.rand(tmp.shape)
-            inputs.append(tmp + noise*1e-7)
+            inputs.append(tmp + noise*2e-5)
 
         return self.classifier(inputs[-1])
