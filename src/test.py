@@ -1,10 +1,13 @@
 import unittest
 
 import torch
+import torchvision
 import torch.nn as nn
+import torchvision.transforms as transforms
+
 from fne.genotopheno.cell_operations import OPS
 from fne.genotopheno import LearnableCell, VisionNetwork
-from fne.evolution import Mutations, get_conf
+from fne.evolution import Mutations, get_conf, Crossover, get_dataset
 
 class TestSum(unittest.TestCase):
     def test_ops_shape(self):
@@ -56,11 +59,8 @@ class TestSum(unittest.TestCase):
                         'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
 
         mutator = Mutations(search_space, prob_mutation=0.8, prob_resize=0.99, prob_swap=0.99)
-        print('--->',genotype)
         mutated_g = mutator(genotype)
-        print('---->',mutated_g)
         mutated_g = mutator(mutated_g)
-        print('---->',mutated_g)
         mutated_g = mutator(mutated_g)
         a, s, d = get_conf(mutated_g)
         print('---->',mutated_g)
@@ -76,7 +76,7 @@ class TestSum(unittest.TestCase):
 
     def test_mutation2(self):
         """
-        Test if a cell mutates correctly
+        Test update happens correctly correctly
         """
         genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7'
         search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
@@ -86,6 +86,29 @@ class TestSum(unittest.TestCase):
         mutated_g = mutator(genotype)
         a, s, d = get_conf(mutated_g)
         mutator.update_strategy(a, True)
+
+    def test_crossover(self):
+        genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7'
+        genotype2 = '0|0|0|3|0|1|0|0  1|1|1|1|1|1|1|1  0|1|0|9|9|0|2|1--1  7'
+        search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
+                        'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
+        crosser = Crossover(search_space, .9, .9)
+        gen = crosser(genotype, genotype2)
+        print('|---->',gen)
+        a, s, d = get_conf(gen)
+        crosser.update_strategy(a, True)
+
+    def test_dataset(self):
+        transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                            download=True, transform=transform)
+        classes = ('plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        dataset = get_dataset(5, trainset, len(classes), distance=lambda x,y:x-y)
+        self.assertTrue(len(dataset)==2000)
+
 
 
 if __name__ == '__main__':
