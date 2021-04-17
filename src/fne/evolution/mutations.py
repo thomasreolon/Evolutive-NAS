@@ -71,15 +71,15 @@ class Mutations():
         architecture = torch.tensor(architecture, dtype=torch.int)
         n_params = torch.tensor(architecture.sum(), dtype=torch.float)
         mutations = []
-        prob = n_params / (n_params+self.avg_len) * self.prob_resize      # reduce prob
-        prob2 = self.avg_len / (n_params+self.avg_len) * self.prob_resize # increase prob
-        depth = int((len(architecture)*2)**0.5)                           # network depth
+        prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4) # reduce prob   3/4 gives a bit more prob to increase rather than reduce
+        prob2 = self.avg_len / (n_params+self.avg_len) * self.prob_resize  # increase prob
+        depth = int((len(architecture)*2)**0.5)                            # network depth
         if len(architecture)>1 and torch.rand(1)<prob.item():
             # reduce the cell by one layer, sum the removed layers to the previous ones
             if depth > 1:
                 end = int(depth*(depth-1)/2)
                 for i in range(len(architecture)-end):
-                    architecture[i] += architecture[i+end]
+                    architecture[i] += int((architecture[i]+architecture[i+end])/2)
                     mutations.append(architecture[i+end].max(dim=0)[1].item())
                 architecture = architecture[:end]
         elif torch.rand(1)<prob2.item():
