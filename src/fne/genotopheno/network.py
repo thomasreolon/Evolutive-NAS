@@ -38,7 +38,6 @@ class VisionNetwork(nn.Module):
             nn.AdaptiveMaxPool2d(1),
             Flatten(),
             nn.Linear(C_ins[-1], n_classes),
-            nn.Softmax(dim=1)
         )
 
     def forward(self, x):
@@ -57,7 +56,7 @@ class VisionNetwork(nn.Module):
                     tmp.append(torch.zeros((s[0], cell.C_out, int((s[2]-1)/2), int((s[3]-1)/2))))
 
             tmp = torch.cat(tmp, dim=1)
-            noise = torch.rand(tmp.shape)
+            noise = torch.rand(tmp.shape, device=next(self.parameters()).device)
             inputs.append(tmp + noise*2e-5)
 
         return self.classifier(inputs[-1])

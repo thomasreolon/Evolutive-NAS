@@ -7,6 +7,7 @@ from .cell_operations import OPS
 
 _cache = {}
 
+# TODO: add param --> parent complexity ((the cost of adding parameters falls on the descendents))
 
 class LearnableCell(nn.Module):
     def __init__(self, C_in, genotype, search_space):
@@ -66,12 +67,12 @@ class LearnableCell(nn.Module):
         return int(self.genotype.split('--')[1].split('  ')[1])
 
     def forward(self, x):
-        print('FORWARD')
+        #print('FORWARD')
         inputs = [[] for _ in range(self.depth+1)]
         inputs[0] = x
         current = 1
         for l_in, l_out, layer in zip(self.node_in, self.node_out, self.layers):
-            print('->', l_in, l_out)
+            #print('->', l_in, l_out)
             if l_out != current:
                 inputs[current] = torch.cat(inputs[current], dim=1)
                 current = l_out
