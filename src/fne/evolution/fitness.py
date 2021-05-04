@@ -1,5 +1,5 @@
 import torch
-from torch.utils import DataLoader
+from torch.utils.data import DataLoader
 
 from .utils import get_conf
 from .datasets import get_dataset

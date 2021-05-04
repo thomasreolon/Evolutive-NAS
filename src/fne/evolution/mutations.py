@@ -80,7 +80,7 @@ class Mutations():
             if depth > 1:
                 end = int(depth*(depth-1)/2)
                 for i in range(len(architecture)-end):
-                    architecture[i] += int((architecture[i]+architecture[i+end])/2)
+                    architecture[i] += ((architecture[i]+architecture[i+end])/2).int()
                     mutations.append(architecture[i+end].max(dim=0)[1].item())
                 architecture = architecture[:end]
         elif torch.rand(1)<prob2.item():

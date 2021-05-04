@@ -8,6 +8,7 @@ import torchvision.transforms as transforms
 from fne.genotopheno.cell_operations import OPS
 from fne.genotopheno import LearnableCell, VisionNetwork
 from fne.evolution import Mutations, get_conf, Crossover, get_dataset
+from fne import Population
 
 class TestSum(unittest.TestCase):
     def test_ops_shape(self):
@@ -109,6 +110,18 @@ class TestSum(unittest.TestCase):
         dataset = get_dataset(5, trainset, len(classes), distance=lambda x,y:x-y)
         self.assertTrue(len(dataset)==2000)
 
+    def test_scoring(self):
+        transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        def target_transform(i):
+            tmp    = torch.zeros(10)
+            tmp[i] = 1.
+            return tmp
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform, target_transform=target_transform)
+        pop = Population(trainset)
+        pop.do_one_generation()
+        self.assertTrue(len(pop.population)==pop.config.pop_size)
 
 
 if __name__ == '__main__':

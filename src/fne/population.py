@@ -1,9 +1,9 @@
 from collections import defaultdict
+import random
 import torch
 
 from .genotopheno import LearnableCell, VisionNetwork
 from .evolution import encode_conf, get_conf, get_dataset, correct_genotype, Crossover, Mutations
-from .history import HistoryOfGenotypes
 
 
 class dotdict(dict):
@@ -114,7 +114,7 @@ class Population():
         scores, prev_ind = [], self.population[1]
         for individual in self.population:
             for offspring in range(of_per_ind):
-                offspring = self.evolve_genotype(genotype, prev_ind)
+                offspring = self.evolve_genotype(individual, prev_ind)
                 arch = offspring.split('--')[0]
                 score = self.history[arch]              # check if the architecture was already tested
 
@@ -125,13 +125,13 @@ class Population():
                 scores.append((offspring, score))
             prev_ind = individual
 
-        # get offspring with 1rank pareto dominance
-        ######
-
-        # sort them by best overall
+        # get offspring with rank1 pareto dominance
+        scores = self.get_pareto_rank1(scores)
 
         # get the best n for the next population
-
+        scores.sort(key= lambda x: x[1][2])                     # TODO: this sorting could be improved
+        self.population = [geno for geno, _ in scores[:self.config.pop_size]]
+        random.shuffle(self.population)
 
 
     def evolve_genotype(self, genotype, mate):
@@ -147,3 +147,33 @@ class Population():
         geno = '0|0|0|0|0|0|0|0--1  5'
         pop = [mutate(geno) for _ in range(num)]  # random initial genotype (mutation occours with prob=self.config.mut_prob)
         return [correct_genotype(g) for g in pop] # fixes it if the mutation had no effect
+
+    def get_pareto_rank1(self, offsprings):
+        goodones = []
+        how_many = self.config.pop_size*self.config.net_depth
+
+        for offspring, (s1,s2,s3) in offsprings:
+            good = True
+            for _, (c1,c2,c3) in offsprings:
+                if s1>c1 and s2>c2 and s3>c3:
+                    # found another offspring which is always better
+                    # (we want to minimize the scores)
+                    good = False
+                    break
+            if good:
+                goodones.append((offspring, (s1,s2,s3)))
+
+        if len(goodones)<self.config.pop_size*self.config.net_depth:
+            ##### too few offspring have rank 1 (a few dominate)
+            # add some other worse offsprings
+            almost_good = []
+            for offspring, (s1,s2,s3) in offsprings:
+                almostgood = True
+                beated = 0
+                for _, (c1,c2,c3) in offsprings:
+                    beated += int(s1>c1) +int(s2>c2) +int(s3>c3)
+                if almostgood:
+                    almost_good.append((beated,(offspring, (s1,s2,s3))))
+            almost_good.sort(key=lambda x: x[0])
+            goodones += [x[1] for x in almost_good[len(goodones):]]
+        return goodones

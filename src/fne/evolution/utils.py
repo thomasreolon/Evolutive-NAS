@@ -4,8 +4,12 @@ rnd = random.randint
 def get_conf(genotype):
     """transform a genotype(string) in some variables"""
     architecture, evol_strattegy = genotype.split('--')
-    architecture = [[int(x) for x in conn.split('|')]
-                    for conn in architecture.split('  ')]
+    try:
+        architecture = [[int(x) for x in conn.split('|')]
+                        for conn in architecture.split('  ')]
+    except:
+        print(genotype)
+        exit(0)
 
     use_shared, dataset = evol_strattegy.split('  ')
     use_shared, dataset = int(use_shared), int(dataset)

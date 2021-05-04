@@ -8,6 +8,7 @@ __pycache__/
 
 # dataset
 src/data
+src/tmp**
 
 # Distribution / packaging
 .Python
