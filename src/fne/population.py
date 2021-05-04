@@ -1,7 +1,9 @@
+from collections import defaultdict
 import torch
 
 from .genotopheno import LearnableCell, VisionNetwork
 from .evolution import encode_conf, get_conf, get_dataset, correct_genotype, Crossover, Mutations
+from .history import HistoryOfGenotypes
 
 
 class dotdict(dict):
@@ -39,7 +41,7 @@ class Config():
         self.pop_size       = c.pop_size        or 5
         self.offsprings     = c.offsprings      or 150
         self.net_depth      = c.net_depth       or 4
-        self.C_in           = c.C_in            or 3
+        self.C_in           = 3
         self.search_space   = c.search_space    or default_search_space
         # target measures
         self.distance       = c.distance
@@ -77,20 +79,71 @@ class Population():
             if a list of genotypes is passed, it is used as the initial population
 
         """
-        self.config = Config(**(config or {}))
+        # load configurations
+        cnf = Config(**(config or {}))
+        self.config = cnf
+
+        # set inital populaton if given, else get a random population
         if isinstance(initial_population, (list, tuple)):
             self.population = initial_population
         else:
-            self.population = self.get_rand(config.pop_size)
+            self.population = self.get_rand(cnf.pop_size)
+
+        # initialize crossover and mutation classes (they will learn parameters through epochs)
+        self.mutation = Mutations(cnf.search_space, cnf.mut_prob, cnf.mut_resize, cnf.mut_swap, cnf.mut_eve)
+        self.crossover = Crossover(cnf.search_space, cnf.cross_prob, cnf.cross_max)
+
+        # remember already tested architectures
+        self.history = defaultdict(lambda: None)
+
+        # store dataset
+        self.dataset  = dataset
+
+        # get info on the problem from the dataset
+        inp, out      = dataset[0]
+        assert len(inp.shape)==3, f"samples shape {inp.shape} is not valid, expecting (C, H, W)"
+        cnf.C_in      = inp.shape[0]
+        cnf.out_shape = out.shape.numel()
+
+
+    def do_one_generation(self):
+        cnf = self.config
+        of_per_ind = self.config.offsprings // len(self.population) # offsprings x individual   
+
+        # get offsprings and give them a score
+        scores, prev_ind = [], self.population[1]
+        for individual in self.population:
+            for offspring in range(of_per_ind):
+                offspring = self.evolve_genotype(genotype, prev_ind)
+                arch = offspring.split('--')[0]
+                score = self.history[arch]              # check if the architecture was already tested
+
+                if score is None:
+                    # compute fitness score for the offspring
+                    score = fitness_score(offspring, cnf.C_in, cnf.search_space, self.dataset, cnf.max_distance, cnf.distance)
+                    self.history[arch] = score
+                scores.append((offspring, score))
+            prev_ind = individual
+
+        # get offspring with 1rank pareto dominance
+        ######
+
+        # sort them by best overall
+
+        # get the best n for the next population
 
 
 
-
+    def evolve_genotype(self, genotype, mate):
+        tmp = self.mutation(genotype)
+        offspring = self.crossover(tmp, mate)
+        self.mutation.update_genoname(tmp, offspring)
+        return offspring
 
 
 
     def get_rand(self, num):
         mutate = Mutations(self.config.search_space)
         geno = '0|0|0|0|0|0|0|0--1  5'
-        pop = [mutate(geno) for _ in range(num)]
-        return [correct_genotype(g) for g in pop]
+        pop = [mutate(geno) for _ in range(num)]  # random initial genotype (mutation occours with prob=self.config.mut_prob)
+        return [correct_genotype(g) for g in pop] # fixes it if the mutation had no effect

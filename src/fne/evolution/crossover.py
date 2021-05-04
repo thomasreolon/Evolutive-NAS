@@ -72,5 +72,5 @@ class Crossover():
             self.prob_crossover = self.prob_crossover*0.98 +0.02*int(success)
         else:
             self.prob_cross_max = self.prob_cross_max*0.98 +0.02*int(success)
-        del self._cache[architecture]
+        #del self._cache[architecture]
 

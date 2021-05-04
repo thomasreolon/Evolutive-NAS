@@ -2,6 +2,7 @@ from collections import defaultdict
 import torch
 from .utils import get_conf, encode_conf
 
+
 class Mutations():
     def __init__(self, search_space, prob_mutation=0.8, prob_resize=0.05, prob_swap=0.04, exploration_vs_exploitation=0.5):
         n = len(search_space)
@@ -106,10 +107,13 @@ class Mutations():
             architecture[0] = architecture[i]
             architecture[i] = tmp
         return architecture
+    
+    def update_genoname(self, old, new):
+        self._cache[new] = self._cache[old]
+        del self._cache[old]
 
-        
     def update_strategy(self, architecture, success):
-        """how mutating an architecture changes performances"""
+        """updates ratio successful/all_mutations for a given mutation type"""
         if isinstance(architecture, str):
             architecture, _, _ = get_conf(genotype)
         architecture = '.'.join([','.join([str(x) for x in ar]) for ar in architecture])
@@ -117,7 +121,7 @@ class Mutations():
             self.sspace_used[j] += 1
             if success:
                 self.sspace_success[j] += 1
-        del self._cache[architecture]
+        #del self._cache[architecture]
 
 
 
