@@ -40,7 +40,7 @@ class Config():
         # global params
         self.pop_size       = c.pop_size        or 5
         self.offsprings     = c.offsprings      or 150
-        self.net_depth      = c.net_depth       or 4
+        self.net_depth      = c.net_depth       or 4       # maybe change to tournament-size
         self.C_in           = 3
         self.search_space   = c.search_space    or default_search_space
         # target measures
@@ -106,7 +106,12 @@ class Population():
         cnf.out_shape = out.shape.numel()
 
 
-    def do_one_generation(self):
+    def do_one_generation(self, more_individuals=False):
+        """ mutate the population and selects the offsprings with the best score
+
+        --> more_individuals:   how many offsprings to keep default = number of population
+                should be (True) when the consecutive step is 'do_darts_step', which selects 1 cell every net_depth cells
+        """
         cnf = self.config
         of_per_ind = self.config.offsprings // len(self.population) # offsprings x individual   
         torch.cuda.empty_cache()
@@ -131,7 +136,8 @@ class Population():
 
         # get the best n for the next population
         scores.sort(key= lambda x: x[1][2])                     # TODO: this sorting could be improved
-        self.population = [geno for geno, _ in scores[:self.config.pop_size]]
+        n = self.config.pop_size*self.config.net_depth if more_individuals else self.config.pop_size
+        self.population = [geno for geno, _ in scores[:n]]
         random.shuffle(self.population)
 
         # update parameters for mutation & crossover
@@ -140,6 +146,9 @@ class Population():
             self.crossover.update_strategy(geno, True)
         self.mutation.clear_cache()
         self.crossover.clear_cache()
+
+    def do_darts_step(step):
+        pass
 
 
     def evolve_genotype(self, genotype, mate):
