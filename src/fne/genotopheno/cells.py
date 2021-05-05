@@ -35,11 +35,9 @@ class LearnableCell(nn.Module):
         # build net
         for i in range(1, depth+1):
             for j in range(i):
-                print(int(i*(i-1)/2+j))
                 for op, c_out in zip(OPS.keys(), architecture[int(i*(i-1)/2+j)]):
                     if c_out > 0:
                         c_in = self.size_in[j]
-                        print('-->', c_in, c_out, 1)
                         coded = f'{op}):{j}->{i}, {c_in}-{c_out}'
                         if use_shared and coded in _cache:
                             self.layers.append(_cache[coded])
@@ -52,14 +50,13 @@ class LearnableCell(nn.Module):
                         self.size_in[i] += c_out
 
         self.C_out = self.size_in[-1]
-        print(self.size_in)
 
     def _get_conf(self, genotype):
-        architecture, evol_strattegy = genotype.split('--')
+        architecture, evol_strategy = genotype.split('--')
         architecture = [[int(x) for x in conn.split('|')]
                         for conn in architecture.split('  ')]
 
-        use_shared, dataset = evol_strattegy.split('  ')
+        use_shared, dataset = evol_strategy.split('  ')
         use_shared, dataset = int(use_shared), int(dataset)
         return architecture, use_shared, dataset
 
@@ -67,12 +64,10 @@ class LearnableCell(nn.Module):
         return int(self.genotype.split('--')[1].split('  ')[1])
 
     def forward(self, x):
-        #print('FORWARD')
         inputs = [[] for _ in range(self.depth+1)]
         inputs[0] = x
         current = 1
         for l_in, l_out, layer in zip(self.node_in, self.node_out, self.layers):
-            #print('->', l_in, l_out)
             if l_out != current:
                 inputs[current] = torch.cat(inputs[current], dim=1)
                 current = l_out

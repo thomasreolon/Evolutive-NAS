@@ -70,12 +70,12 @@ class Mutations():
     def mutate_resize(self, architecture):
         """mutation that adds/removes layers"""
         architecture = torch.tensor(architecture, dtype=torch.int)
-        n_params = torch.tensor(architecture.sum(), dtype=torch.float)
+        n_params = float(architecture.sum())
         mutations = []
         prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4) # reduce prob   3/4 gives a bit more prob to increase rather than reduce
         prob2 = self.avg_len / (n_params+self.avg_len) * self.prob_resize  # increase prob
         depth = int((len(architecture)*2)**0.5)                            # network depth
-        if len(architecture)>1 and torch.rand(1)<prob.item():
+        if len(architecture)>1 and torch.rand(1)<prob:
             # reduce the cell by one layer, sum the removed layers to the previous ones
             if depth > 1:
                 end = int(depth*(depth-1)/2)
@@ -83,7 +83,7 @@ class Mutations():
                     architecture[i] += ((architecture[i]+architecture[i+end])/2).int()
                     mutations.append(architecture[i+end].max(dim=0)[1].item())
                 architecture = architecture[:end]
-        elif torch.rand(1)<prob2.item():
+        elif torch.rand(1)<prob2:
             # add a new layer and apply some mutations to it
             # poss. problem:   small new layer --> bottleneck --> low scores
             n = len(architecture[0])
@@ -109,20 +109,32 @@ class Mutations():
         return architecture
     
     def update_genoname(self, old, new):
+        if old==new: return
+        if isinstance(old, str):
+            old, _, _ = get_conf(old)
+        old = '.'.join([','.join([str(x) for x in ar]) for ar in old])
+        if isinstance(new, str):
+            new, _, _ = get_conf(new)
+        new = '.'.join([','.join([str(x) for x in ar]) for ar in new])
         self._cache[new] = self._cache[old]
         del self._cache[old]
 
     def update_strategy(self, architecture, success):
         """updates ratio successful/all_mutations for a given mutation type"""
         if isinstance(architecture, str):
-            architecture, _, _ = get_conf(genotype)
+            architecture, _, _ = get_conf(architecture)
         architecture = '.'.join([','.join([str(x) for x in ar]) for ar in architecture])
+        if architecture not in self._cache: return
         for j in self._cache[architecture]:
             self.sspace_used[j] += 1
             if success:
                 self.sspace_success[j] += 1
         #del self._cache[architecture]
 
+    def clear_cache(self):
+        for k,v in self._cache.items():
+            self.sspace_used[v] += 1
+        self._cache = {}
 
 
 

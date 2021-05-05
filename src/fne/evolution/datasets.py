@@ -38,9 +38,9 @@ class VisionDataset(Dataset):
         i, order = 0, list(range(len(self.data)))
         random.shuffle(order)
         base_class = self.get_base_class()
-        while len(self.ids)<2000 and i<len(self.data):
+        while len(self.ids)<200 and i<len(self.data):
             _, y = self.data[order[i]]
-            dis = self.distance(base_class, y)
+            dis = float(self.distance(base_class, y))
             prob = 0.4 - (dis/self.max_distance)*self.n/10
             if random.random() < prob:
                 self.ids.append(order[i])

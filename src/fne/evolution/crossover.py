@@ -62,15 +62,34 @@ class Crossover():
         length = len(arch1) if len(arch1)<=len(arch2) else len(arch2)
         return arch1[:length]
 
+    def update_genoname(self, old, new):
+        if old==new: return
+        if isinstance(old, str):
+            old, _, _ = get_conf(old)
+        old = '.'.join([','.join([str(x) for x in ar]) for ar in old])
+        if isinstance(new, str):
+            new, _, _ = get_conf(new)
+        new = '.'.join([','.join([str(x) for x in ar]) for ar in new])
+        self._cache[new] = self._cache[old]
+        del self._cache[old]
+
 
     def update_strategy(self, architecture, success):
         """which crossing strategy is better"""
         if isinstance(architecture, str):
-            architecture, _, _ = get_conf(genotype)
+            architecture, _, _ = get_conf(architecture)
         architecture = '.'.join([','.join([str(x) for x in ar]) for ar in architecture])
+        if architecture not in self._cache: return
         if self._cache[architecture]==0:
             self.prob_crossover = self.prob_crossover*0.98 +0.02*int(success)
         else:
             self.prob_cross_max = self.prob_cross_max*0.98 +0.02*int(success)
         #del self._cache[architecture]
+
+    def clear_cache(self):
+        """assume all the others failed"""
+        for k,v in self._cache.items():
+            if v==0: self.prob_crossover = self.prob_crossover*0.98
+            else: self.prob_cross_max = self.prob_cross_max*0.98
+        self._cache = {}
 

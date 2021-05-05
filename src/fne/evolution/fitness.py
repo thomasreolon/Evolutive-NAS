@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
+import numpy as np
 
 from .utils import get_conf
 from .datasets import get_dataset
@@ -7,14 +8,18 @@ from ..genotopheno import LearnableCell
 
 
 def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, distance):
-    arch, _, dataset = get_conf(genotype)
+    _, _, dataset = get_conf(genotype)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    neural_net = LearnableCell(genotype, C_in, search_space).to(device)
+    neural_net = LearnableCell(C_in, genotype, search_space).to(device)
     dataset = get_dataset(dataset, original_dataset, max_distance, distance)
     loader = DataLoader(dataset, batch_size=64)
 
-    score1 = score_NTK(loader, neural_net, device)
+    # sometimes it fails & i have no idea why
+    try: score1 = score_NTK(loader, neural_net, device)
+    except Exception as e:
+        score1 = 1e10
+
     score2 = score_linear(loader, neural_net, device)
     score3 = n_params(neural_net) * score1 * score2   # TODO: replace it with a new score in the future
 
@@ -30,7 +35,7 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
         # check how many samples have been processed
         if samples_to_use <= 0:
             break
-        samples_to_use -= inputs.shape[0].item()
+        samples_to_use -= inputs.shape[0]
 
         # pass input through network
         inputs = inputs.to(device)
@@ -68,13 +73,14 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
 # the code is a pretty bad (there were 2 score functions, but i only understood this one (and changed it))
 def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=200):
     """fitted nets minimize this score (the lowest the best)"""
+    neural_net.eval()
 
     jacobs, inps = [], []
     for i, (inputs, targets) in enumerate(dataloader):
         # check how many samples have been processed
         if samples_to_use <= 0:
             break
-        samples_to_use -= inputs.shape[0].item()
+        samples_to_use -= inputs.shape[0]
 
         inps += [inp for inp in inputs]
         grads = []
@@ -85,9 +91,9 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
         # get the gradient of the inputs wrt. the output of the i° neuron in the output layer
         outputs = neural_net(inputs)
         for i in range(outputs.size(1)):
-            outputs[:, i].backward(retain_graph=True)
+            (outputs[:, i]).sum().backward(retain_graph=True)
             grads.append(inputs.grad.detach().view(inputs.size(0), -1))   #(Batch, ch, H, W).view(inputs.size(0), -1)
-            inputs.zero_grad()
+            inputs.grad.zero_()
         grads = torch.cat([g.unsqueeze(0).to('cpu') for g in grads], dim=0)
         ## grads.shape = (output_neurons, batch_size, inputs)
 
@@ -109,15 +115,15 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
             K[j,i] = corr * input_simil
 
     # determinant to summarize
-    det = torch.linalg.det(K)
+    det = torch.det(K)
     # if we have many linear regions
     # --> the rows of K should be different between each other
     # --> high variance --> high determinant
 
     # return a minus score (so we have to minimize it)
-    return np.nan_to_num( - torch.log(det.item()) , copy=True, nan=100000.0)
+    return np.nan_to_num( - torch.log(det) , copy=True, nan=100000.0)
 
 
 def n_params(neural_net: torch.nn.Module):
     """number of parameters: the lowest the best"""
-    return sum(p.numel() for p in model.parameters())
+    return sum(p.numel() for p in neural_net.parameters())

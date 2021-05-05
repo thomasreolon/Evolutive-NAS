@@ -10,6 +10,9 @@ from fne.genotopheno import LearnableCell, VisionNetwork
 from fne.evolution import Mutations, get_conf, Crossover, get_dataset
 from fne import Population
 
+import os
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 class TestSum(unittest.TestCase):
     def test_ops_shape(self):
         """
@@ -111,15 +114,25 @@ class TestSum(unittest.TestCase):
         self.assertTrue(len(dataset)==2000)
 
     def test_scoring(self):
+        def dist(a,b):
+            _, i = a.max(dim=0)
+            _, j = b.max(dim=0)
+            return torch.abs(i-j)
+        settings = {
+            'max_distance': 10,
+            'distance': dist,
+        }
         transform = transforms.Compose(
             [transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
         def target_transform(i):
             tmp    = torch.zeros(10)
             tmp[i] = 1.
             return tmp
+
         trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform, target_transform=target_transform)
-        pop = Population(trainset)
+        pop = Population(trainset, settings)
         pop.do_one_generation()
         self.assertTrue(len(pop.population)==pop.config.pop_size)
 

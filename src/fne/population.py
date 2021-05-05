@@ -3,7 +3,7 @@ import random
 import torch
 
 from .genotopheno import LearnableCell, VisionNetwork
-from .evolution import encode_conf, get_conf, get_dataset, correct_genotype, Crossover, Mutations
+from .evolution import encode_conf, get_conf, get_dataset, correct_genotype, Crossover, Mutations, fitness_score
 
 
 class dotdict(dict):
@@ -109,6 +109,7 @@ class Population():
     def do_one_generation(self):
         cnf = self.config
         of_per_ind = self.config.offsprings // len(self.population) # offsprings x individual   
+        torch.cuda.empty_cache()
 
         # get offsprings and give them a score
         scores, prev_ind = [], self.population[1]
@@ -133,11 +134,20 @@ class Population():
         self.population = [geno for geno, _ in scores[:self.config.pop_size]]
         random.shuffle(self.population)
 
+        # update parameters for mutation & crossover
+        for geno in self.population:
+            self.mutation.update_strategy(geno, True)
+            self.crossover.update_strategy(geno, True)
+        self.mutation.clear_cache()
+        self.crossover.clear_cache()
+
 
     def evolve_genotype(self, genotype, mate):
-        tmp = self.mutation(genotype)
-        offspring = self.crossover(tmp, mate)
-        self.mutation.update_genoname(tmp, offspring)
+        tmp = self.mutation(genotype)                       # perform mutation with prob a
+        tmp2 = self.crossover(tmp, mate)                    # perform crossover with prob b
+        offspring = correct_genotype(tmp2)                  # correct genotype if it has errors (eg. all zeros)
+        self.mutation.update_genoname(tmp, offspring)       # update the genotype name in the cache 
+        self.crossover.update_genoname(tmp2, offspring)     # update the genotype name in the cache 
         return offspring
 
 

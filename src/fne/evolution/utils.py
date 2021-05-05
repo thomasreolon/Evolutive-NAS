@@ -4,13 +4,9 @@ rnd = random.randint
 def get_conf(genotype):
     """transform a genotype(string) in some variables"""
     architecture, evol_strattegy = genotype.split('--')
-    try:
-        architecture = [[int(x) for x in conn.split('|')]
-                        for conn in architecture.split('  ')]
-    except:
-        print(genotype)
-        exit(0)
 
+    architecture = [[int(x) for x in conn.split('|')]
+                    for conn in architecture.split('  ')]
     use_shared, dataset = evol_strattegy.split('  ')
     use_shared, dataset = int(use_shared), int(dataset)
     return architecture, use_shared, dataset
@@ -33,12 +29,12 @@ def correct_genotype(genotype):
         tot += sum(block)
         act = int(((i+1)*2)**0.5)
         if act*(act+1)//2 == i+1:
-            if tot==0 and i+1==len(architecture):
+            if tot==0 and i+1==len(architecture) and i>0:
                 # remove last layer if it is empty
                 less_depth   = int(act*(act-1)//2)
                 architecture = architecture[:less_depth]
             elif tot==0:
-                # add randomly a connection
+                # add a connection randomly
                 c, s     = rnd(0,len(block)-1), rnd(1, 7)
                 block[c] = s
 
