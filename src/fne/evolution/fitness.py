@@ -6,8 +6,12 @@ from .utils import get_conf
 from .datasets import get_dataset
 from ..genotopheno import LearnableCell
 
+import gc
+
 
 def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, distance):
+    gc.collect()
+    torch.cuda.empty_cache()
     _, _, dataset = get_conf(genotype)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -16,12 +20,14 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     loader = DataLoader(dataset, batch_size=64)
 
     # sometimes it fails & i have no idea why
-    try: score1 = score_NTK(loader, neural_net, device)
+    try:
+        score1 = score_NTK(loader, neural_net, device)
     except Exception as e:
         score1 = 1e10
 
     score2 = score_linear(loader, neural_net, device)
-    score3 = n_params(neural_net) * score1 * score2   # TODO: replace it with a new score in the future
+    # TODO: replace it with a new score in the future
+    score3 = n_params(neural_net) * score1 * score2
 
     return (score1, score2, score3)
 
@@ -92,27 +98,29 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
         outputs = neural_net(inputs)
         for i in range(outputs.size(1)):
             (outputs[:, i]).sum().backward(retain_graph=True)
-            grads.append(inputs.grad.detach().view(inputs.size(0), -1))   #(Batch, ch, H, W).view(inputs.size(0), -1)
+            # (Batch, ch, H, W).view(inputs.size(0), -1)
+            grads.append(inputs.grad.detach().view(inputs.size(0), -1))
             inputs.grad.zero_()
         grads = torch.cat([g.unsqueeze(0).to('cpu') for g in grads], dim=0)
         ## grads.shape = (output_neurons, batch_size, inputs)
 
-        jacobs.append(grads) # then concat on batch size dimension
+        jacobs.append(grads)  # then concat on batch size dimension
 
     # jacobs_i,j,k = gradient for sample i,  of the function "output neuron j" for the "input pixel k"               (not really a pixel because channels are separated...)
-    jacobs = torch.cat(jacobs, dim=1).transpose(0,1) 
+    jacobs = torch.cat(jacobs, dim=1).transpose(0, 1)
 
     nsamples = jacobs.shape[0]
     # get correlations between the jacobians
     K = torch.zeros((nsamples, nsamples))
     for i in range(nsamples):
         for j in range(0, i+1):
-            x = jacobs[i,:,:]
-            y = jacobs[j,:,:]
+            x = jacobs[i, :, :]
+            y = jacobs[j, :, :]
             corr = (x*y).mean() / (x.mean()*y.mean())
-            input_simil = 1. - ((inps[i]-inps[j])**2).mean()  # --> improvable measure
-            K[i,j] = corr * input_simil
-            K[j,i] = corr * input_simil
+            # --> improvable measure
+            input_simil = 1. - ((inps[i]-inps[j])**2).mean()
+            K[i, j] = corr * input_simil
+            K[j, i] = corr * input_simil
 
     # determinant to summarize
     det = torch.det(K)
@@ -121,7 +129,7 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
     # --> high variance --> high determinant
 
     # return a minus score (so we have to minimize it)
-    return np.nan_to_num( - torch.log(det) , copy=True, nan=100000.0)
+    return np.nan_to_num((-torch.log(det)).detach().numpy(), copy=True, nan=100000.0)
 
 
 def n_params(neural_net: torch.nn.Module):
