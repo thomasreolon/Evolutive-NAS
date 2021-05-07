@@ -13,6 +13,7 @@ from fne import Population
 import os
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
+
 class TestSum(unittest.TestCase):
     def test_ops_shape(self):
         """
@@ -25,7 +26,7 @@ class TestSum(unittest.TestCase):
             x = torch.rand((16, confs['C_in'], 32, 32))
             y = net(x)
             self.assertEqual(list(y.shape), [16, confs['C_out'], 32, 32])
-            
+
     def test_learnable_cell(self):
         """
         Test if a genotype is correctly encoded into a phenotype
@@ -62,20 +63,21 @@ class TestSum(unittest.TestCase):
         search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
                         'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
 
-        mutator = Mutations(search_space, prob_mutation=0.8, prob_resize=0.99, prob_swap=0.99)
+        mutator = Mutations(search_space, prob_mutation=0.8,
+                            prob_resize=0.99, prob_swap=0.99)
         mutated_g = mutator(genotype)
         mutated_g = mutator(mutated_g)
         mutated_g = mutator(mutated_g)
         a, s, d = get_conf(mutated_g)
-        print('---->',mutated_g)
-        self.assertGreaterEqual(10,d)
-        self.assertTrue(s in (0,1))
+        print('---->', mutated_g)
+        self.assertGreaterEqual(10, d)
+        self.assertTrue(s in (0, 1))
         a = torch.tensor(a)
         d = int((a.shape[0]*2)**.5)
         start = 0
         for i in range(d):
             end = int((i+1)*(i+2)/2)
-            self.assertTrue(a[start:end,:].sum()>0)
+            self.assertTrue(a[start:end, :].sum() > 0)
             start = end
 
     def test_mutation2(self):
@@ -86,7 +88,8 @@ class TestSum(unittest.TestCase):
         search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
                         'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
 
-        mutator = Mutations(search_space, prob_mutation=0.8, prob_resize=0.99, prob_swap=0.99)
+        mutator = Mutations(search_space, prob_mutation=0.8,
+                            prob_resize=0.99, prob_swap=0.99)
         mutated_g = mutator(genotype)
         a, s, d = get_conf(mutated_g)
         mutator.update_strategy(a, True)
@@ -98,23 +101,24 @@ class TestSum(unittest.TestCase):
                         'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
         crosser = Crossover(search_space, .9, .9)
         gen = crosser(genotype, genotype2)
-        print('|---->',gen)
+        print('|---->', gen)
         a, s, d = get_conf(gen)
         crosser.update_strategy(a, True)
 
     def test_dataset(self):
         transform = transforms.Compose(
             [transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            download=True, transform=transform)
+                                                download=True, transform=transform)
         classes = ('plane', 'car', 'bird', 'cat',
-            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-        dataset = get_dataset(5, trainset, len(classes), distance=lambda x,y:x-y)
-        self.assertTrue(len(dataset)==2000)
+                   'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        dataset = get_dataset(5, trainset, len(classes),
+                              distance=lambda x, y: x-y)
+        self.assertTrue(len(dataset) == 2000)
 
     def test_scoring(self):
-        def dist(a,b):
+        def dist(a, b):
             _, i = a.max(dim=0)
             _, j = b.max(dim=0)
             return torch.abs(i-j)
@@ -124,17 +128,18 @@ class TestSum(unittest.TestCase):
         }
         transform = transforms.Compose(
             [transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
         def target_transform(i):
-            tmp    = torch.zeros(10)
+            tmp = torch.zeros(10)
             tmp[i] = 1.
             return tmp
 
-        trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform, target_transform=target_transform)
+        trainset = torchvision.datasets.CIFAR10(
+            root='./data', train=True, download=True, transform=transform, target_transform=target_transform)
         pop = Population(trainset, settings)
-        pop.do_one_generation()
-        self.assertTrue(len(pop.population)==pop.config.pop_size)
+        pop.do_evolution_step()
+        self.assertTrue(len(pop.population) == pop.config.pop_size)
 
 
 if __name__ == '__main__':

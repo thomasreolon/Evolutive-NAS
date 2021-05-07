@@ -48,15 +48,17 @@ class VisionNetwork(nn.Module):
             tmp = []
             for j in range(wide):
                 cell = self.layers[i*self.depth+j]
-                if weights[i,j]>0.01:
-                    res = cell(inputs[i]) * weights[i,j]
+                if weights[i, j] > 0.01:
+                    res = cell(inputs[i]) * weights[i, j]
                     tmp.append(res)
                 else:
                     s = inputs[i].shape
-                    tmp.append(torch.zeros((s[0], cell.C_out, int((s[2]-1)/2), int((s[3]-1)/2))))
+                    tmp.append(torch.zeros(
+                        (s[0], cell.C_out, int((s[2]-1)/2), int((s[3]-1)/2))))
 
             tmp = torch.cat(tmp, dim=1)
-            noise = torch.rand(tmp.shape, device=next(self.parameters()).device)
+            noise = torch.rand(tmp.shape, device=next(
+                self.parameters()).device)
             inputs.append(tmp + noise*2e-5)
 
         return self.classifier(inputs[-1])
