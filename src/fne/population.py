@@ -18,7 +18,7 @@ class dotdict(dict):
 class Config():
     """configurations for evolution"""
 
-    def __init__(self, **kw):
+    def __init__(self, dictionary=None):
         """
         Default configuration for the network
 
@@ -38,7 +38,9 @@ class Config():
         --> cross_prob=.3:      probability to mix two genotypes
         --> cross_max=.2:       probability to do a crossover taking the minimum between the two parents
         """
-        c = dotdict(kw)
+        if isinstance(dictionary, Config):
+            dictionary = dictionary.__dict__
+        c = dotdict(dictionary or {})
         default_search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
                                 'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
         # global params
@@ -83,7 +85,7 @@ class Population():
 
         """
         # load configurations
-        cnf = Config(**(config or {}))
+        cnf = Config((config or {}))
         self.config = cnf
 
         # set inital populaton if given, else get a random population
