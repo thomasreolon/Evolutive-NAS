@@ -93,6 +93,7 @@ class Population():
             self.population = initial_population
         else:
             self.population = self.get_rand(cnf.pop_size)
+        self.best_offspring = self.population[0]
 
         # initialize crossover and mutation classes (they will learn parameters through epochs)
         self.mutation = Mutations(
@@ -113,22 +114,23 @@ class Population():
         cnf.C_in = inp.shape[0]
         cnf.n_classes = out.numel()
 
-    def do_one_generation(self):
+    def do_one_generation(self, verbose=False):
         """
         we use the first selection approach (score based) for three times
         then we use DARTS selection for the last one (darts is more expensive)
         """
-        self.do_evolution_step()
-        self.do_evolution_step()
-        self.do_evolution_step(True)
-        self.do_darts_step()
+        self.do_evolution_step(verbose=verbose)
+        self.do_evolution_step(verbose=verbose)
+        self.do_evolution_step(True, verbose=verbose)
+        self.do_darts_step(verbose=verbose)
 
-    def do_evolution_step(self, more_individuals=False):
+    def do_evolution_step(self, more_individuals=False, verbose=False):
         """ mutate the population and selects the offsprings with the best score
 
         --> more_individuals:   how many offsprings to keep default = number of population
                 should be (True) when the consecutive step is 'do_darts_step', which selects 1 cell every tourn_size cells
         """
+        if verbose: print('EVOLUTION STEP BEGIN')
         cnf = self.config
         # offsprings x individual
         of_per_ind = self.config.offsprings // len(self.population)
@@ -149,6 +151,7 @@ class Population():
                         offspring, cnf.C_in, cnf.search_space, self.dataset, cnf.max_distance, cnf.distance)
                     self.history[arch] = score
                 scores.append((offspring, score))
+                if verbose: print('[',score,'] -> score offspring', offspring)
             prev_ind = individual
 
         # get offspring with rank1 pareto dominance
@@ -160,6 +163,7 @@ class Population():
         n = self.config.pop_size * \
             self.config.tourn_size if more_individuals else self.config.pop_size
         self.population = [geno for geno, _ in scores[:n]]
+        self.best_offspring = self.population[0]
         random.shuffle(self.population)
 
         # update parameters for mutation & crossover
@@ -168,14 +172,16 @@ class Population():
             self.crossover.update_strategy(geno, True)
         self.mutation.clear_cache()
         self.crossover.clear_cache()
+        if verbose: print('EVOLUTION STEP END')
 
-    def do_darts_step(self):
+    def do_darts_step(self, verbose=False):
         """
         instead of relying just on our scores. we apply DARTS mechanism to improve the selection process.
         we create a network of cells where we jointly learn the weights & an hyperparameter called alphas.
         this parameter is a matrix depthXt_size where the cells at the same depth are competing against each other to survive.
         after some epochs we get the alphas and for each depth we select the cell with the highest value. (to pass to the next generation)
         """
+        if verbose: print('DARTS STEP BEGIN')
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         t_size = self.config.tourn_size
         depth = len(self.population) // t_size
@@ -187,7 +193,7 @@ class Population():
             optimizer, lambda x: 1/(1+x/2)**2)
         loss_fn = nn.L1Loss()
 
-        for _ in range(10):
+        for e in range(3):
             for inps, targs in loader:
                 inps, targs = inps.to(device), targs.to(device)
                 outs = network(inps)
@@ -196,12 +202,14 @@ class Population():
                 optimizer.step()
                 optimizer.zero_grad()
             scheduler.step()
+            if verbose: print('epoch',e,'alphas',network.alphas)
 
         _, results = network.alphas.max(dim=1)
         pop = []
         for i in range(self.config.pop_size):
             pop.append(self.population[i*t_size+int(results[i])])
         self.population = pop
+        if verbose: print('DARTS STEP END')
 
     def evolve_genotype(self, genotype, mate):
         # perform mutation with prob a
