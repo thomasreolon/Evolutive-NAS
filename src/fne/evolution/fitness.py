@@ -57,14 +57,14 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
             logit[_idx:_idx +
                   1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=retain)
             grad = []
-            params_count_max_ = int(max_ram*1000000000/int(samples_to_use/len(inputs_)+1)/len(inputs_)/2) ######## i have 8GB gpu ram --> limit max number of params
+            params_count, max_ = 0, max_ram*125000000/int(samples_to_use/len(inputs_)+1)/len(inputs_) ######## i have 8GB gpu ram --> limit max number of params
             for name, W in neural_net.named_parameters():
                 if 'weight' in name and W.grad is not None:
+                    if params_count + W.numel() > max_: break ; print('braks')
                     grad.append(W.grad.view(-1).detach())
+                    params_count += W.numel()
             # append the gradient vector for that node/sample
-            tmp = torch.cat(grad, -1)
-            tmp = torch.cat([tmp[:params_count_max_], tmp[-params_count_max_:]], -1) #### can't keep every paramenter in memory...
-            grads.append(tmp)
+            grads.append(torch.cat(grad, -1))
             neural_net.zero_grad()
     # make matrix of gradients
     grads = torch.stack(grads, 0)
@@ -104,9 +104,9 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
         for i in range(outputs.size(1)):
             (outputs[:, i]).sum().backward(retain_graph=True)
             # (Batch, ch, H, W).view(inputs.size(0), -1)
-            grads.append(inputs.grad.detach().view(inputs.size(0), -1))
+            grads.append(inputs.grad.detach().view(inputs.size(0), -1).clone())
             inputs.grad.zero_()
-        grads = torch.cat([g.unsqueeze(0).to('cpu') for g in grads], dim=0)
+        grads = torch.stack(grads)
         ## grads.shape = (output_neurons, batch_size, inputs)
 
         jacobs.append(grads)  # then concat on batch size dimension
@@ -119,22 +119,23 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
     K = torch.zeros((nsamples, nsamples))
     for i in range(nsamples):
         for j in range(0, i+1):
-            x = jacobs[i, :, :]
-            y = jacobs[j, :, :]
-            corr = (x*y).mean() / (x.mean()*y.mean())
+            x = jacobs[i, :, :] - jacobs[i, :, :].mean()
+            y = jacobs[j, :, :] - jacobs[j, :, :].mean()
+            corr = (x*y).sum() / ((x**2).sum()*(y**2).sum())**(1/2)
             # --> improvable measure
-            input_simil = 1. - ((inps[i]-inps[j])**2).mean()
+            input_simil = 4. - ((inps[i]-inps[j])**2).mean()
             K[i, j] = corr * input_simil
             K[j, i] = corr * input_simil
 
     # determinant to summarize
     det = torch.det(K)
+    if det<-1e3: det=10
     # if we have many linear regions
     # --> the rows of K should be different between each other
     # --> high variance --> high determinant
 
     # return a minus score (so we have to minimize it)
-    return np.nan_to_num((-torch.log(det)).detach().numpy(), copy=True, nan=100000.0)
+    return np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
 
 
 def n_params(neural_net: torch.nn.Module):
