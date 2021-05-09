@@ -1,4 +1,4 @@
-import random
+import random, gc, torch, sys
 rnd = random.randint
 
 def get_conf(genotype):
@@ -41,3 +41,20 @@ def correct_genotype(genotype):
             tot = 0
     return encode_conf(architecture, use_shared, dataset)
 
+# general utils
+
+def clear_cache():
+    gc.collect()
+    torch.cuda.empty_cache()
+
+def print_memory():
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                print(type(obj), obj.size())
+        except:
+            pass
+
+def print_(*args, **kw):
+    print(*args, **kw, end='')
+    sys.stdout.flush()

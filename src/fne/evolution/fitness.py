@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import numpy as np
 
-from .utils import get_conf
+from .utils import get_conf, clear_cache, print_memory
 from .datasets import get_dataset
 from ..genotopheno import LearnableCell
 
@@ -10,8 +10,6 @@ import gc
 
 
 def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, distance):
-    gc.collect()
-    torch.cuda.empty_cache()
     _, _, dataset = get_conf(genotype)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -32,16 +30,17 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     return (score1, score2, score3)
 
 
-def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=200):
+def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=20, max_ram=8):
     """fitted nets minimize this score (the lowest the best)"""
     neural_net.eval()
-
+    remaining = samples_to_use
     grads = []
     for i, (inputs, targets) in enumerate(dataloader):
+        clear_cache()
         # check how many samples have been processed
-        if samples_to_use <= 0:
+        if remaining <= 0:
             break
-        samples_to_use -= inputs.shape[0]
+        remaining -= inputs.shape[0]
 
         # pass input through network
         inputs = inputs.to(device)
@@ -51,17 +50,22 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
 
         # for each node in the output layer
         for _idx in range(len(inputs_)):
+            clear_cache()
+            #print_memory() ; print('='*40+'\n')
             # calculate gradient on the weights
+            retain = _idx!=len(inputs_)-1
             logit[_idx:_idx +
-                  1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=True)
+                  1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=retain)
             grad = []
+            params_count_max_ = int(max_ram*1000000000/int(samples_to_use/len(inputs_)+1)/len(inputs_)/2) ######## i have 8GB gpu ram --> limit max number of params
             for name, W in neural_net.named_parameters():
                 if 'weight' in name and W.grad is not None:
                     grad.append(W.grad.view(-1).detach())
             # append the gradient vector for that node/sample
-            grads.append(torch.cat(grad, -1))
+            tmp = torch.cat(grad, -1)
+            tmp = torch.cat([tmp[:params_count_max_], tmp[-params_count_max_:]], -1) #### can't keep every paramenter in memory...
+            grads.append(tmp)
             neural_net.zero_grad()
-            torch.cuda.empty_cache()
     # make matrix of gradients
     grads = torch.stack(grads, 0)
     # ntk_ij = sum_c[ grads_ic * grads_jc ] = grads @ grads.transpose(0,1)
@@ -83,6 +87,7 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
 
     jacobs, inps = [], []
     for i, (inputs, targets) in enumerate(dataloader):
+        clear_cache()
         # check how many samples have been processed
         if samples_to_use <= 0:
             break
