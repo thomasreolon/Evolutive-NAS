@@ -108,7 +108,7 @@ print('Done')
 def get_scores(model):
     s1 = score_NTK(loader, model, device, 20)
     s2 = score_linear(loader, model, device, 20)
-    s3 = s1*s2*n_params(model)
+    s3 = s1*s2*torch.log(n_params(model)).item()
     return s1, s2, s3
 
 
@@ -120,11 +120,12 @@ n_classes = 10
 
 rand_scores = []
 loader = torch.utils.data.DataLoader(dataset, 8,  True) # custom batch size because some models use too much memory
-for i in range(repeat*5):
-    clear_cache()                                   # clean GPU RAM
-    model = get_random_net(n_classes).to(device)    # load model
-    rand_scores.append(get_scores(model))           # score the model
-    print_(f'{int(100*(i+1)/n_models)}% ')          # print run %
+for i in range(5):
+    for _ in range(repeat):
+        clear_cache()                                   # clean GPU RAM
+        model = get_random_net(n_classes).to(device)    # load model
+        rand_scores.append(get_scores(model))           # score the model
+        print_(f'{int(100*(i+1)/n_models)}% ')          # print run %
 
 
 popular_scores = []
@@ -149,10 +150,11 @@ for i, getter in enumerate([net1, net2, net3]):
 # scores
 scores = [rand_scores, popular_scores, hand_scores]
 vals = rand_scores+popular_scores+hand_scores
-minmax, perc = [], int(len(vals)/10)
+minmax, perc = [], int(len(vals)/5)
 for i in range(3):
     vals.sort(key=lambda x: x[i])
-    minmax.append([vals[perc][i], vals[-perc][i]])
+    diff = (vals[-perc][i]-vals[perc][i])/10
+    minmax.append([vals[perc][i]-diff, vals[-perc][i]+diff])
 
 
 # save results
@@ -192,3 +194,18 @@ plt.ylim(minmax[2])
 plt.legend()
 plt.show()
 
+"""   NN  popular scores
+
+[(91.92739868164062, 27.72519, 45518.2031),
+(102.24115753173828, 27.724752, 50624.3008),
+(95.63170623779297, 27.72513, 47352.3047),
+(102.0496597290039, 27.725193, 50530.2852),
+(1653.3934326171875, 27.713036, 743657.625)),
+(2025.8201904296875, 27.709034, 911034.875)),
+(1393.7567138671875, 27.71905, 627015.125)),
+(1646.406982421875, 27.713589, 740530.125)),
+(52.73725128173828, 27.72586, 27365.6777),
+(37.14685821533203, 27.725842, 19275.7148),
+(29.311800003051758, 27.725855, 15210.0664),
+(29.89641571044922, 27.725832, 15513.4150)]
+"""

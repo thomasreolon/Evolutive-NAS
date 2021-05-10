@@ -25,7 +25,7 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
 
     score2 = score_linear(loader, neural_net, device)
     # TODO: replace it with a new score in the future
-    score3 = n_params(neural_net) * score1 * score2
+    score3 = (torch.log(n_params(neural_net)) * score1 * score2).item()
 
     return (score1, score2, score3)
 
@@ -76,7 +76,7 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
     # if big difference between biggest & smallest --> GOOD
     # I think the intuition is like: "there is regularity in how the gradients are similar between each other"
     return np.nan_to_num(
-        (eigenvalues[-1] / eigenvalues[0]).item(), copy=True, nan=100000.0)
+        (eigenvalues[-1] / eigenvalues[0]).abs().item(), copy=True, nan=100000.0)
 
 
 # https://github.com/BayesWatch/nas-without-training/blob/8ba0313ea1b6038e6d0c6822031a100135715e2a/score_networks.py
@@ -128,16 +128,11 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
             K[j, i] = corr * input_simil
 
     # determinant to summarize
-    det = torch.det(K)
-    if det<-1e3: det=10
-    # if we have many linear regions
-    # --> the rows of K should be different between each other
-    # --> high variance --> high determinant
-
-    # return a minus score (so we have to minimize it)
+    det = torch.det(K).abs()
     return np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
 
 
 def n_params(neural_net: torch.nn.Module):
     """number of parameters: the lowest the best"""
-    return sum(p.numel() for p in neural_net.parameters())
+    tot = sum(p.numel() for p in neural_net.parameters())
+    return torch.tensor([tot], dtype=torch.float)
