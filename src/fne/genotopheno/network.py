@@ -19,15 +19,16 @@ class VisionNetwork(nn.Module):
         super().__init__()
 
         assert len(population) % depth == 0
-        wide = int(len(population) / depth)
+        width = int(len(population) / depth)
 
-        self.alphas = nn.Parameter(torch.ones((depth, wide)))
+        self.alphas = nn.Parameter(torch.ones((depth, width)))
         self.layers = nn.ModuleList()
         self.depth = depth
+        self.population = population
 
         C_ins = [C_in] + [0 for _ in range(depth)]
         for i, genotype in enumerate(population):
-            prev_l = int(i/wide)
+            prev_l = int(i/width)
             cell = LearnableCell(C_ins[prev_l], genotype, search_space)
             self.layers.append(cell)
             C_ins[1+prev_l] += cell.C_out
@@ -41,24 +42,25 @@ class VisionNetwork(nn.Module):
         )
 
     def forward(self, x):
-        inputs, wide = [x], int(len(self.layers)/self.depth)
-        weights = nn.functional.softmax(self.alphas, dim=1)
+        inputs, width = [x], int(len(self.layers)/self.depth)
+        weights = -torch.log_softmax(self.alphas, dim=1)
+        device = next(self.parameters()).device
 
         for i in range(self.depth):
             tmp = []
-            for j in range(wide):
-                cell = self.layers[i*self.depth+j]
+            for j in range(width):
+                cell = self.layers[i*width+j]
                 if weights[i, j] > 0.01:
                     res = cell(inputs[i]) * weights[i, j]
                     tmp.append(res)
                 else:
                     s = inputs[i].shape
+                    h,w = (int((s[2]-1)/2), int((s[3]-1)/2)) if cell.do_pool else (int(s[2]), int(s[3]))
                     tmp.append(torch.zeros(
-                        (s[0], cell.C_out, int((s[2]-1)/2), int((s[3]-1)/2))))
+                        (s[0], cell.C_out, h, w), device=device))
 
             tmp = torch.cat(tmp, dim=1)
-            noise = torch.rand(tmp.shape, device=next(
-                self.parameters()).device)
+            noise = torch.rand(tmp.shape, device=device)
             inputs.append(tmp + noise*2e-5)
 
         return self.classifier(inputs[-1])

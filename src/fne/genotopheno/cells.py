@@ -10,7 +10,7 @@ _cache = {}
 # TODO: add param --> parent complexity ((the cost of adding parameters falls on the descendents))
 
 class LearnableCell(nn.Module):
-    def __init__(self, C_in, genotype, search_space):
+    def __init__(self, C_in, genotype, search_space, do_pool=None):
         super().__init__()
 
         # translate genotype
@@ -30,6 +30,7 @@ class LearnableCell(nn.Module):
         self.size_in = [0 for _ in range(depth+1)]
         self.size_in[0] = C_in
 
+        self.do_pool = do_pool
         self.pooling = nn.AvgPool2d((3, 3), stride=2)
 
         # build net
@@ -75,4 +76,9 @@ class LearnableCell(nn.Module):
             inputs[l_out].append(res)
 
         x = torch.cat(inputs[-1], dim=1)
-        return self.pooling(x)
+        img_size = min(x.shape[2], x.shape[3])
+        if self.do_pool or (self.do_pool is None and img_size>50):
+            ## do pooling if image is still high resolution OR specified
+            self.do_pool = True
+            x = self.pooling(x)
+        return x

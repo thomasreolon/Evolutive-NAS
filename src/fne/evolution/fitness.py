@@ -15,6 +15,7 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     neural_net = LearnableCell(C_in, genotype, search_space).to(device)
     dataset = get_dataset(dataset, original_dataset, max_distance, distance)
+    # TODO: add config gpu RAM
     loader = DataLoader(dataset, batch_size=64)
 
     # sometimes it fails & i have no idea why
@@ -51,7 +52,6 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
         # for each node in the output layer
         for _idx in range(len(inputs_)):
             clear_cache()
-            #print_memory() ; print('='*40+'\n')
             # calculate gradient on the weights
             retain = _idx!=len(inputs_)-1
             logit[_idx:_idx +
@@ -60,7 +60,7 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
             params_count, max_ = 0, max_ram*125000000/int(samples_to_use/len(inputs_)+1)/len(inputs_) ######## i have 8GB gpu ram --> limit max number of params
             for name, W in neural_net.named_parameters():
                 if 'weight' in name and W.grad is not None:
-                    if params_count + W.numel() > max_: break ; print('braks')
+                    if params_count + W.numel() > max_: break
                     grad.append(W.grad.view(-1).detach())
                     params_count += W.numel()
             # append the gradient vector for that node/sample
@@ -81,7 +81,7 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
 
 # https://github.com/BayesWatch/nas-without-training/blob/8ba0313ea1b6038e6d0c6822031a100135715e2a/score_networks.py
 # the code is a pretty bad (there were 2 score functions, but i only understood this one (and changed it))
-def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=200):
+def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=40):
     """fitted nets minimize this score (the lowest the best)"""
     neural_net.eval()
 
@@ -129,7 +129,9 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
 
     # determinant to summarize
     det = torch.det(K).abs()
-    return np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
+    score = np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
+    if score < 0: score = 100  # (workaround) for some reasons, networks with many skip-connect get negative scores
+    return score
 
 
 def n_params(neural_net: torch.nn.Module):

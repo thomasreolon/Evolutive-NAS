@@ -134,34 +134,39 @@ class Population():
         cnf = self.config
         # offsprings x individual
         of_per_ind = self.config.offsprings // len(self.population)
-        torch.cuda.empty_cache()
+        # how many offsprings to keep
+        n = self.config.pop_size * self.config.tourn_size \
+            if more_individuals else self.config.pop_size
 
         # get offsprings and give them a score
-        scores, prev_ind = [], self.population[1]
-        for individual in self.population:
-            for offspring in range(of_per_ind):
-                offspring = self.evolve_genotype(individual, prev_ind)
-                arch = offspring.split('--')[0]
-                # check if the architecture was already tested
-                score = self.history[arch]
+        scores, prev_ind = {}, self.population[1]
+        while len(scores)<n:
+            for individual in self.population:
+                for offspring in range(of_per_ind):
+                    offspring = self.evolve_genotype(individual, prev_ind)
+                    arch = offspring.split('--')[0]
+                    # check if the architecture was already tested
+                    score = self.history[arch]
 
-                if score is None:
-                    # compute fitness score for the offspring
-                    score = fitness_score(
-                        offspring, cnf.C_in, cnf.search_space, self.dataset, cnf.max_distance, cnf.distance)
-                    self.history[arch] = score
-                scores.append((offspring, score))
-                if verbose: print('[',score,'] -> score offspring', offspring)
-            prev_ind = individual
+                    if score is None:
+                        # compute fitness score for the offspring
+                        score = fitness_score(
+                            offspring, cnf.C_in, cnf.search_space, self.dataset, cnf.max_distance, cnf.distance)
+                        self.history[arch] = score
+                    
+                    # no identical genotypes reinserted
+                    scores[offspring] = score
+                    if verbose: print('[',score,'] -> score offspring', offspring)
+                prev_ind = individual
 
         # get offspring with rank1 pareto dominance
-        scores = self.get_pareto_rank1(scores)
+        scores = list(scores.items())
+        scores = self.get_pareto_rank1(scores, n)
 
         # get the best n for the next population
-        # TODO: this sorting could be improved
-        scores.sort(key=lambda x: x[1][2])
-        n = self.config.pop_size * \
-            self.config.tourn_size if more_individuals else self.config.pop_size
+        scores = self.sort_scores_by_rank_sum(scores)
+
+        # select n offsprings
         self.population = [geno for geno, _ in scores[:n]]
         self.best_offspring = self.population[0]
         random.shuffle(self.population)
@@ -174,6 +179,20 @@ class Population():
         self.crossover.clear_cache()
         if verbose: print('EVOLUTION STEP END')
 
+    def sort_scores_by_rank_sum(self, scores):
+        tot = {s:0 for s in scores}
+        # score = sum of the rank
+        # the lower the better
+        for k in range(3):
+            scores.sort(key=lambda x: x[1][k])
+            for i,s in enumerate(scores):
+                tot[s] += i
+        tot = list(tot.items())
+        # sort by rank
+        tot.sort(key=lambda x: x[1])
+        return [s for s,_ in tot]
+
+
     def do_darts_step(self, verbose=False):
         """
         instead of relying just on our scores. we apply DARTS mechanism to improve the selection process.
@@ -182,18 +201,24 @@ class Population():
         after some epochs we get the alphas and for each depth we select the cell with the highest value. (to pass to the next generation)
         """
         if verbose: print('DARTS STEP BEGIN')
+        # network settings
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         t_size = self.config.tourn_size
-        depth = len(self.population) // t_size
+        depth = len(self.population) // t_size        # = self.config.pop_size
         network = VisionNetwork(
-            self.config.C_in, self.config.n_classes, self.config.search_space, depth).to(device)
-        loader = DataLoader(dataset, batch_size=16, shuffle=True)
+            self.config.C_in, self.config.n_classes, self.population, self.config.search_space, depth).to(device)
+
+        # training settings
         optimizer = torch.optim.Adam(network.parameters(), weight_decay=1e-5)
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lambda x: 1/(1+x/2)**2)
         loss_fn = nn.L1Loss()
 
-        for e in range(3):
+        for e in range(10):
+            # whole trainingset can be too expensive
+            small_dataset = get_dataset(e, self.dataset, self.config.max_distance, self.config.distance)
+            loader = DataLoader(small_dataset, batch_size=128, shuffle=True)
+            # backpropagation to learn the aplhas (and some weights)
             for inps, targs in loader:
                 inps, targs = inps.to(device), targs.to(device)
                 outs = network(inps)
@@ -202,9 +227,10 @@ class Population():
                 optimizer.step()
                 optimizer.zero_grad()
             scheduler.step()
-            if verbose: print('epoch',e,'alphas',network.alphas)
+            if verbose: print('epoch',e+1,'alphas:',network.alphas.tolist())
 
-        _, results = network.alphas.max(dim=1)
+        # lower alphas --> high -log_softmax --> more inportance in the network
+        _, results = network.alphas.min(dim=1)
         pop = []
         for i in range(self.config.pop_size):
             pop.append(self.population[i*t_size+int(results[i])])
@@ -232,26 +258,27 @@ class Population():
         # fixes it if the mutation had no effect
         return [correct_genotype(g) for g in pop]
 
-    def get_pareto_rank1(self, offsprings):
-        goodones = []
-        how_many = self.config.pop_size*self.config.tourn_size
+    def get_pareto_rank1(self, offsprings, n):
+        goodones = {}
 
         for offspring, (s1, s2, s3) in offsprings:
             good = True
             for _, (c1, c2, c3) in offsprings:
                 if s1 > c1 and s2 > c2 and s3 > c3:
-                    # found another offspring which is always better
+                    # found a contendant offspring which is always better that s
                     # (we want to minimize the scores)
                     good = False
                     break
             if good:
-                goodones.append((offspring, (s1, s2, s3)))
+                goodones[offspring] = (s1, s2, s3)
 
-        if len(goodones) < self.config.pop_size*self.config.tourn_size:
+        almost_good, fill = [], 1
+        if len(goodones) < n:
             # too few offspring have rank 1 (a few dominate)
             # add some other worse offsprings
-            almost_good = []
+            fill = n-len(goodones)
             for offspring, (s1, s2, s3) in offsprings:
+                if offspring in goodones: continue          # already passed selection
                 almostgood = True
                 beated = 0
                 for _, (c1, c2, c3) in offsprings:
@@ -259,5 +286,8 @@ class Population():
                 if almostgood:
                     almost_good.append((beated, (offspring, (s1, s2, s3))))
             almost_good.sort(key=lambda x: x[0])
-            goodones += [x[1] for x in almost_good[len(goodones):]]
-        return goodones
+        
+        # precedence to rank 1, if they are not enough: fill with less beated
+        goodones = list(goodones.items())
+        filler = [x[1] for x in almost_good[:fill]]
+        return goodones + filler
