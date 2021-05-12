@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import numpy as np
 
-from .utils import get_conf, clear_cache, print_memory
+from .utils import get_conf, clear_cache
 from .datasets import get_dataset
 from ..genotopheno import LearnableCell
 

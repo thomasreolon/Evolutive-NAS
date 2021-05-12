@@ -92,7 +92,7 @@ class TestSum(unittest.TestCase):
                             prob_resize=0.99, prob_swap=0.99)
         mutated_g = mutator(genotype)
         a, s, d = get_conf(mutated_g)
-        mutator.update_strategy(a, True)
+        mutator.update_strat_good(a)
 
     def test_crossover(self):
         genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7'
@@ -103,7 +103,7 @@ class TestSum(unittest.TestCase):
         gen = crosser(genotype, genotype2)
         print('|---->', gen)
         a, s, d = get_conf(gen)
-        crosser.update_strategy(a, True)
+        crosser.update_strat_good(a)
 
     def test_dataset(self):
         transform = transforms.Compose(

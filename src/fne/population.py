@@ -5,8 +5,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .genotopheno import LearnableCell, VisionNetwork
-from .evolution import encode_conf, get_conf, get_dataset, correct_genotype, Crossover, Mutations, fitness_score
+from .evolution import get_dataset, correct_genotype, Crossover, Mutations, fitness_score
+from .evolution.utils import clear_cache, get_memory
 
+from .genotopheno import cells
 
 class dotdict(dict):
     """dot.notation to access dictionary attributes, if no attribute returns None"""
@@ -14,6 +16,10 @@ class dotdict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
+
+# TODO: freeze alphas, train, unfreeze, 
+# TODO: try-catch (GPU fail) that finds best batch_size
+# TODO: init weights from big set???
 
 class Config():
     """configurations for evolution"""
@@ -173,10 +179,10 @@ class Population():
 
         # update parameters for mutation & crossover
         for geno in self.population:
-            self.mutation.update_strategy(geno, True)
-            self.crossover.update_strategy(geno, True)
-        self.mutation.clear_cache()
-        self.crossover.clear_cache()
+            self.mutation.update_strat_good(geno)
+            self.crossover.update_strat_good(geno)
+        self.mutation.update_strat_bad()
+        self.crossover.update_strat_bad()
         if verbose: print('EVOLUTION STEP END')
 
     def sort_scores_by_rank_sum(self, scores):
@@ -207,6 +213,7 @@ class Population():
         depth = len(self.population) // t_size        # = self.config.pop_size
         network = VisionNetwork(
             self.config.C_in, self.config.n_classes, self.population, self.config.search_space, depth).to(device)
+        if verbose: print(f'n params = {sum([p.numel() for p in network.parameters()])}')
 
         # training settings
         optimizer = torch.optim.Adam(network.parameters(), weight_decay=1e-5)
@@ -214,12 +221,13 @@ class Population():
             optimizer, lambda x: 1/(1+x/2)**2)
         loss_fn = nn.L1Loss()
 
-        for e in range(10):
+        for e in range(7,10):
             # whole trainingset can be too expensive
             small_dataset = get_dataset(e, self.dataset, self.config.max_distance, self.config.distance)
-            loader = DataLoader(small_dataset, batch_size=128, shuffle=True)
+            loader = DataLoader(small_dataset, batch_size=4, shuffle=True)
             # backpropagation to learn the aplhas (and some weights)
             for inps, targs in loader:
+                clear_cache()
                 inps, targs = inps.to(device), targs.to(device)
                 outs = network(inps)
                 loss = loss_fn(outs, targs)
@@ -227,7 +235,7 @@ class Population():
                 optimizer.step()
                 optimizer.zero_grad()
             scheduler.step()
-            if verbose: print('epoch',e+1,'alphas:',network.alphas.tolist())
+            if verbose: print('epoch',e-6,'alphas:',network.alphas.tolist())
 
         # lower alphas --> high -log_softmax --> more inportance in the network
         _, results = network.alphas.min(dim=1)

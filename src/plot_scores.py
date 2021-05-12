@@ -17,7 +17,7 @@ import sys, gc, json
 from fne.genotopheno import LearnableCell, VisionNetwork
 from fne.evolution import Mutations
 from fne.evolution.fitness import score_NTK, score_linear, n_params
-from fne.evolution.utils import print_memory, print_, clear_cache
+from fne.evolution.utils import get_memory, print_, clear_cache
 
 
 

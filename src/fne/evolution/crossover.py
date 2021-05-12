@@ -1,6 +1,11 @@
 import torch
 from .utils import get_conf, encode_conf
 
+"""
+
+
+"""
+
 
 class Crossover():
 
@@ -74,21 +79,21 @@ class Crossover():
         del self._cache[old]
 
 
-    def update_strategy(self, architecture, success):
+    def update_strat_good(self, architecture):
         """which crossing strategy is better"""
         if isinstance(architecture, str):
             architecture, _, _ = get_conf(architecture)
         architecture = '.'.join([','.join([str(x) for x in ar]) for ar in architecture])
         if architecture not in self._cache: return
         if self._cache[architecture]==0:
-            self.prob_crossover = self.prob_crossover*0.98 +0.02*int(success)
+            self.prob_crossover = self.prob_crossover*0.98 +0.02
         else:
-            self.prob_cross_max = self.prob_cross_max*0.98 +0.02*int(success)
-        #del self._cache[architecture]
+            self.prob_cross_max = self.prob_cross_max*0.98 +0.02
+        del self._cache[architecture]
 
-    def clear_cache(self):
+    def update_strat_bad(self):
         """assume all the others failed"""
-        for k,v in self._cache.items():
+        for _,v in self._cache.items():
             if v==0: self.prob_crossover = self.prob_crossover*0.98
             else: self.prob_cross_max = self.prob_cross_max*0.98
         self._cache = {}

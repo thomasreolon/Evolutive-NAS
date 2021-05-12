@@ -39,13 +39,15 @@ class LearnableCell(nn.Module):
                 for op, c_out in zip(OPS.keys(), architecture[int(i*(i-1)/2+j)]):
                     if c_out > 0:
                         c_in = self.size_in[j]
-                        coded = f'{op}):{j}->{i}, {c_in}-{c_out}'
+                        coded = f'{op}):{c_in}-{c_out}'
                         if use_shared and coded in _cache:
                             self.layers.append(_cache[coded])
                         else:
                             layer = OPS[op](c_in, c_out, 1, True)
                             self.layers.append(layer)
-                            _cache[coded] = layer
+                            in_memory_limits = (c_in==3 or c_in+c_out<10) and len(_cache)<100  # limits to memory not to run out os space
+                            if use_shared and in_memory_limits:
+                                _cache[coded] = layer
                         self.node_in.append(j)
                         self.node_out.append(i)
                         self.size_in[i] += c_out

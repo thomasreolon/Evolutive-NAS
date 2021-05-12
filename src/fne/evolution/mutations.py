@@ -31,6 +31,14 @@ class Mutations():
         architecture, use_shared, dataset = get_conf(genotype)
         mutations = []
 
+        # azzerate smallest entry at level 0
+        if torch.rand(1)<self.prob_mutation/2:
+            k, min_= 0, 9999
+            for i, val in enumerate(architecture[0]):
+                if val<min_ and val>0: k, min_= i, val
+            architecture[0][k] = 0
+
+
         # update architecture edges
         while(torch.rand(1)<self.prob_mutation):
             architecture, j = self.mutate_one_edge(architecture)
@@ -119,7 +127,7 @@ class Mutations():
         self._cache[new] = self._cache[old]
         del self._cache[old]
 
-    def update_strategy(self, architecture, success):
+    def update_strat_good(self, architecture):
         """updates ratio successful/all_mutations for a given mutation type"""
         if isinstance(architecture, str):
             architecture, _, _ = get_conf(architecture)
@@ -127,12 +135,11 @@ class Mutations():
         if architecture not in self._cache: return
         for j in self._cache[architecture]:
             self.sspace_used[j] += 1
-            if success:
-                self.sspace_success[j] += 1
-        #del self._cache[architecture]
+            self.sspace_success[j] += 1
+        del self._cache[architecture]
 
-    def clear_cache(self):
-        for k,v in self._cache.items():
+    def update_strat_bad(self):
+        for _,v in self._cache.items():
             self.sspace_used[v] += 1
         self._cache = {}
 

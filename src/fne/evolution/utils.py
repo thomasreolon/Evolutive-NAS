@@ -47,13 +47,15 @@ def clear_cache():
     gc.collect()
     torch.cuda.empty_cache()
 
-def print_memory():
+def get_memory():
+    mem = []
     for obj in gc.get_objects():
         try:
             if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                print(type(obj), obj.size())
+                mem.append(str((type(obj), obj.size())))
         except:
             pass
+    return '\n'.join(mem)
 
 def print_(*args, **kw):
     print(*args, **kw, end='')
