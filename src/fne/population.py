@@ -16,11 +16,6 @@ class dotdict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
-
-# TODO: freeze alphas, train, unfreeze, 
-# TODO: try-catch (GPU fail) that finds best batch_size
-# TODO: init weights from big set???
-
 class Config():
     """configurations for evolution"""
 
@@ -146,6 +141,7 @@ class Population():
 
         # get offsprings and give them a score
         scores, prev_ind = {}, self.population[1]
+        toprint = 1e9
         while len(scores)<n:
             for individual in self.population:
                 for offspring in range(of_per_ind):
@@ -162,7 +158,7 @@ class Population():
                     
                     # no identical genotypes reinserted
                     scores[offspring] = score
-                    if verbose: print('[',score,'] -> score offspring', offspring)
+                    if verbose and score[2]<toprint: print('[',score,'] -> score offspring', offspring) ; toprint = score[2]
                 prev_ind = individual
 
         # get offspring with rank1 pareto dominance
@@ -207,24 +203,32 @@ class Population():
         after some epochs we get the alphas and for each depth we select the cell with the highest value. (to pass to the next generation)
         """
         if verbose: print('DARTS STEP BEGIN')
+
         # network settings
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         t_size = self.config.tourn_size
         depth = len(self.population) // t_size        # = self.config.pop_size
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # GPU memory info
         network = VisionNetwork(
-            self.config.C_in, self.config.n_classes, self.population, self.config.search_space, depth).to(device)
-        if verbose: print(f'n params = {sum([p.numel() for p in network.parameters()])}')
-
-        # training settings
-        optimizer = torch.optim.Adam(network.parameters(), weight_decay=1e-5)
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer, lambda x: 1/(1+x/2)**2)
+            self.config.C_in, self.config.n_classes, self.population, self.config.search_space, depth)
+        n_params = sum([p.numel() for p in network.parameters()])
+        w = self.dataset[0][0].shape[2]
+        free_mem  = torch.cuda.get_device_properties(0).total_memory -torch.cuda.memory_allocated(0)
+        batch_size = max(1, int(free_mem /(n_params * (w/5)**2 *4)))   # memory used by NN_activations-> nparams*ratioWidth/Kernel*sizeofFloat
+        network = network.to(device)
+        if verbose: print(f'n params = {n_params}, batch_size={batch_size}')
+        
+        # briefly train network to get improved weights (not modifying alphas)
+        network.alphas.requires_grad = False
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, network.parameters()), lr=.004, weight_decay=1e-5)
         loss_fn = nn.L1Loss()
-
-        for e in range(7,10):
+        prev_loss=None
+        for e in range(9):
+            tot_loss,cc = 0, 0
             # whole trainingset can be too expensive
             small_dataset = get_dataset(e, self.dataset, self.config.max_distance, self.config.distance)
-            loader = DataLoader(small_dataset, batch_size=4, shuffle=True)
+            loader = DataLoader(small_dataset, batch_size, shuffle=True)
             # backpropagation to learn the aplhas (and some weights)
             for inps, targs in loader:
                 clear_cache()
@@ -232,10 +236,33 @@ class Population():
                 outs = network(inps)
                 loss = loss_fn(outs, targs)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(filter(lambda p: p.requires_grad, network.parameters()), 2.)
                 optimizer.step()
                 optimizer.zero_grad()
-            scheduler.step()
-            if verbose: print('epoch',e-6,'alphas:',network.alphas.tolist())
+                # stats on how training is doing
+                if prev_loss is None: prev_loss = loss.item()/inps.shape[0]
+                tot_loss+=loss.item()
+                cc += inps.shape[0]
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = param_group['lr']*(.5 + float(tot_loss/cc < prev_loss)*2.5)
+            prev_loss = tot_loss/cc
+
+        # whole trainingset can be too expensive
+        network.alphas.requires_grad = True
+        optimizer = torch.optim.Adam(network.parameters(), lr=.004, weight_decay=1e-5)
+        small_dataset = get_dataset(9, self.dataset, self.config.max_distance, self.config.distance)
+        loader = DataLoader(small_dataset, batch_size, shuffle=True)
+        # backpropagation to learn the aplhas (and some weights)
+        for inps, targs in loader:
+            clear_cache()
+            inps, targs = inps.to(device), targs.to(device)
+            outs = network(inps)
+            loss = loss_fn(outs, targs)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(network.parameters(), 2.)
+            optimizer.step()
+            optimizer.zero_grad()
+        if verbose: print('alphas:',network.alphas.tolist())
 
         # lower alphas --> high -log_softmax --> more inportance in the network
         _, results = network.alphas.min(dim=1)

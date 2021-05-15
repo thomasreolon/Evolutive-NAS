@@ -31,8 +31,13 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     return (score1, score2, score3)
 
 
-def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=20, max_ram=8):
+def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=20):
     """fitted nets minimize this score (the lowest the best)"""
+
+    # calculate how much ram
+    free_mem  = torch.cuda.get_device_properties(0).total_memory -torch.cuda.memory_allocated(0)
+    max_ram = int(free_mem/1e9)  ## how many GB are free (hoping that no other application is using the RAM)
+
     neural_net.eval()
     remaining = samples_to_use
     grads = []

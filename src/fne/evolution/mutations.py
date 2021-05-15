@@ -121,6 +121,7 @@ class Mutations():
         if isinstance(old, str):
             old, _, _ = get_conf(old)
         old = '.'.join([','.join([str(x) for x in ar]) for ar in old])
+        if old not in self._cache: return
         if isinstance(new, str):
             new, _, _ = get_conf(new)
         new = '.'.join([','.join([str(x) for x in ar]) for ar in new])
