@@ -40,7 +40,7 @@ class Mutations():
 
 
         # update architecture edges
-        while(torch.rand(1)<self.prob_mutation):
+        if (torch.rand(1)<self.prob_mutation):
             architecture, j = self.mutate_one_edge(architecture)
             mutations.append(j)
         architecture = self.mutate_swap(architecture)
@@ -72,7 +72,7 @@ class Mutations():
         j = int(rand[1] * len(architecture[0]))
         #                    exploitation                                       exploration
         var = (1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max())
-        architecture[i][j]  += int((var-0.12)*rand[2]*16)
+        architecture[i][j]  += int((var-0.12)*rand[2]*16)*5
         return architecture, j
 
     def mutate_resize(self, architecture):

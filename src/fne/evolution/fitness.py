@@ -135,12 +135,8 @@ def score_jacob(dataloader: DataLoader, neural_net: torch.nn.Module, device, sam
             K[j, i] = corr
 
     # determinant to summarize
-    det = torch.det(K).abs()
-    score = np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
-    if score < 0: score = 100  # (workaround) for some reasons, networks with many skip-connect get negative scores
-    
-    #_, ld = np.linalg.slogdet(K.cpu().numpy())
-    #score = np.nan_to_num(ld, copy=True, nan=100000.0)
+    _, ld = np.linalg.slogdet(K.cpu().numpy())
+    score = np.nan_to_num(ld, copy=True, nan=100000.0)
     return score
 
 
