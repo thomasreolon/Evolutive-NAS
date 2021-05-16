@@ -5,7 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 from fne.genotopheno.cell_operations import OPS
-from fne.genotopheno import LearnableCell, VisionNetwork
+from fne.genotopheno import LearnableCell, DARTSNetwork
 from fne.evolution import Mutations, get_conf
 
 assert torch.cuda.is_available()
@@ -23,7 +23,7 @@ def main():
     # neural net 1
     geno1 = get_random_genotype()
     geno2 = get_random_genotype()
-    neural_net1 = VisionNetwork(3, len(classes), [geno1,geno2,geno1,geno2], search_space, depth=2)
+    neural_net1 = DARTSNetwork(3, len(classes), [geno1,geno2,geno1,geno2], search_space, depth=2)
     neural_net1.to('cuda')
 
     for e in range(n_epochs):

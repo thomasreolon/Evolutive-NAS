@@ -14,7 +14,8 @@ class Flatten(nn.Module):
         return x.view(x.shape[0], -1)
 
 
-class VisionNetwork(nn.Module):
+class DARTSNetwork(nn.Module):
+    """creates a network of cells where cells at the same layer_depth fight between each other to obtain an higher alpha"""
     def __init__(self, C_in, n_classes, population, search_space, depth=3):
         super().__init__()
 
@@ -43,7 +44,7 @@ class VisionNetwork(nn.Module):
 
     def forward(self, x):
         inputs, width = [x], int(len(self.layers)/self.depth)
-        weights = -torch.log_softmax(self.alphas, dim=1)
+        weights = torch.softmax(self.alphas, dim=1)
         device = next(self.parameters()).device
 
         for i in range(self.depth):
@@ -64,3 +65,38 @@ class VisionNetwork(nn.Module):
             inputs.append(tmp + noise*2e-5)
 
         return self.classifier(inputs[-1])
+
+
+class EvaluationNetwork(nn.Module):
+    """This network takes as input a population of genotypes and creates a deep NN"""
+    def __init__(self, C_in, n_classes, population, search_space):
+        super().__init__()
+
+        self.layers = nn.ModuleList()
+        self.population = population
+
+        C_ins = [C_in]
+        for i, genotype in enumerate(population):
+            cell = LearnableCell(C_ins[i], genotype, search_space)
+            self.layers.append(cell)
+            C_ins.append(cell.C_out+C_in)
+        
+        self.smoothing = nn.AvgPool2d((3, 3), stride=2)
+
+        self.classifier = nn.Sequential(
+            nn.BatchNorm2d(C_ins[-1]),
+            nn.Dropout2d(),
+            nn.AdaptiveMaxPool2d(1),
+            Flatten(),
+            nn.Linear(C_ins[-1], n_classes),
+        )
+
+    def forward(self, x):
+        inputs = x
+        for cell in self.layers:
+            x = cell(x)
+            if cell.do_pool:
+                inputs = self.smoothing(inputs)
+            x = torch.cat((x, inputs), dim=1)
+
+        return self.classifier(x)

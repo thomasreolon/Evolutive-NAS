@@ -15,7 +15,6 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     neural_net = LearnableCell(C_in, genotype, search_space).to(device)
     dataset = get_dataset(dataset, original_dataset, max_distance, distance)
-    # TODO: add config gpu RAM
     loader = DataLoader(dataset, batch_size=64)
 
     # sometimes it fails & i have no idea why
@@ -24,13 +23,15 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     except Exception as e:
         score1 = 1e10
 
-    score2 = score_linear(loader, neural_net, device)
-    # TODO: replace it with a new score in the future
-    score3 = (torch.log(n_params(neural_net)) * score1 * score2).item()
+    score2 = score_jacob(loader, neural_net, device)
+
+    score3 = score_activations(loader, neural_net, device)
 
     return (score1, score2, score3)
 
 
+### from https://github.com/VITA-Group/TENAS/blob/main/lib/procedures/ntk.py
+# some changes not to run out of memory
 def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=20):
     """fitted nets minimize this score (the lowest the best)"""
 
@@ -85,13 +86,12 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
 
 
 # https://github.com/BayesWatch/nas-without-training/blob/8ba0313ea1b6038e6d0c6822031a100135715e2a/score_networks.py
-# the code is a pretty bad (there were 2 score functions, but i only understood this one (and changed it))
-def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=40):
+def score_jacob(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=40):
     """fitted nets minimize this score (the lowest the best)"""
     neural_net.eval()
 
     jacobs, inps = [], []
-    for i, (inputs, targets) in enumerate(dataloader):
+    for i, (inputs, _) in enumerate(dataloader):
         clear_cache()
         # check how many samples have been processed
         if samples_to_use <= 0:
@@ -101,8 +101,7 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
         inps += [inp for inp in inputs]
         grads = []
         neural_net.zero_grad()
-        inputs = inputs.to(device)
-        inputs.requires_grad_(True)
+        inputs = inputs.to(device).requires_grad_(True)
 
         # get the gradient of the inputs wrt. the output of the i° neuron in the output layer
         outputs = neural_net(inputs)
@@ -124,22 +123,77 @@ def score_linear(dataloader: DataLoader, neural_net: torch.nn.Module, device, sa
     K = torch.zeros((nsamples, nsamples))
     for i in range(nsamples):
         for j in range(0, i+1):
-            x = jacobs[i, :, :] - jacobs[i, :, :].mean()
-            y = jacobs[j, :, :] - jacobs[j, :, :].mean()
-            corr = (x*y).sum() / ((x**2).sum()*(y**2).sum())**(1/2)
-            # --> improvable measure
+            corr = 0
+            for k in range(jacobs.size(1)):
+                x = jacobs[i, k, :] - jacobs[i, k, :].mean()
+                y = jacobs[j, k, :] - jacobs[j, k, :].mean()
+                corr += (x*y).sum() / ((x**2).sum()*(y**2).sum())**(1/2)
+
+            # TODO: better way to measure similarity between 2 inputs
             input_simil = 4. - ((inps[i]-inps[j])**2).mean()
             K[i, j] = corr * input_simil
-            K[j, i] = corr * input_simil
+            K[j, i] = corr
 
     # determinant to summarize
     det = torch.det(K).abs()
     score = np.nan_to_num(torch.log(det).detach().numpy(), copy=True, nan=100000.0)
     if score < 0: score = 100  # (workaround) for some reasons, networks with many skip-connect get negative scores
+    
+    #_, ld = np.linalg.slogdet(K.cpu().numpy())
+    #score = np.nan_to_num(ld, copy=True, nan=100000.0)
     return score
 
 
 def n_params(neural_net: torch.nn.Module):
     """number of parameters: the lowest the best"""
-    tot = sum(p.numel() for p in neural_net.parameters())
-    return torch.tensor([tot], dtype=torch.float)
+    return sum(p.numel() for p in neural_net.parameters())
+
+# https://github.com/BayesWatch/nas-without-training/blob/5368686cb0b740d5a779bb787d6fa2d5fe5cbe1f/score_networks.py
+#### Not sure about this code...
+def score_activations(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=256):
+    """fitted nets minimize this score (the lowest the best)"""
+    neural_net.eval()
+    def counting_forward_hook(module, inp, out):
+        try:
+            if isinstance(inp, tuple): inp = inp[0]
+            # flatten input
+            inp = inp.view(inp.size(0), -1)
+            # where there are activations
+            x = (inp > 0).float()
+
+            # correlation between samples in the same batch
+            K = x @ x.t()
+            K2 = (1.-x) @ (1.-x.t())
+            neural_net.K +=  K.cpu().numpy() + K2.cpu().numpy()
+        except:
+            pass
+   
+    
+    for _, module in neural_net.named_modules():
+        if 'ReLU' in str(type(module)):
+            module.register_forward_hook(counting_forward_hook)
+
+    neural_net.K = None
+    neural_net, s = neural_net.to(device), []
+    with torch.no_grad():
+        for inputs, _ in dataloader:
+            clear_cache()
+            if samples_to_use <= 0:
+                break
+            samples_to_use -= inputs.shape[0]
+
+            # sum of similarities
+            neural_net.K = np.zeros((inputs.shape[0], inputs.shape[0]))
+
+            # during forward we calculate K
+            neural_net(inputs.to(device))
+
+            # abs(log determinant is the score)
+            _, ld = np.linalg.slogdet(neural_net.K)
+            s.append(ld)
+        # average over some batches
+        score = np.mean(s)
+    ## we want to minimize, so negative
+    return score
+
+

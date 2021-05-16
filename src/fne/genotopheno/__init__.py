@@ -1,2 +1,2 @@
 from .cells import LearnableCell
-from .network import VisionNetwork
+from .network import DARTSNetwork, EvaluationNetwork

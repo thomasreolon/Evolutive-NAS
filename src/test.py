@@ -6,7 +6,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 
 from fne.genotopheno.cell_operations import OPS
-from fne.genotopheno import LearnableCell, VisionNetwork
+from fne.genotopheno import LearnableCell, DARTSNetwork
 from fne.evolution import Mutations, get_conf, Crossover, get_dataset
 from fne import Population
 
@@ -40,7 +40,7 @@ class TestSum(unittest.TestCase):
         y = net(x)
         self.assertEqual(list(y.shape), [16, 7, 15, 15])
 
-    def test_visionnetwork(self):
+    def test_DARTSNetwork(self):
         """
         Test if 4 cells genotypes can be encoded into a full network
         """
@@ -50,7 +50,7 @@ class TestSum(unittest.TestCase):
                         'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
         population = [genotype1, genotype2, genotype2, genotype1]
 
-        net = VisionNetwork(3, 5, population, search_space, 2)
+        net = DARTSNetwork(3, 5, population, search_space, 2)
         x = torch.rand(16, 3, 129, 64)
         y = net(x)
         self.assertEqual(list(y.shape), [16, 5])

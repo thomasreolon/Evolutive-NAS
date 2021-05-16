@@ -10,15 +10,24 @@ import torch.nn as nn
 import torchvision
 import torchvision.models as models
 import torchvision.transforms as transforms
+import numpy as np
 
 import matplotlib.pyplot as plt
-import sys, gc, json
+from mpl_toolkits.mplot3d import Axes3D, axes3d
+import json, os
 
-from fne.genotopheno import LearnableCell, VisionNetwork
+from fne.genotopheno import LearnableCell, DARTSNetwork
 from fne.evolution import Mutations
-from fne.evolution.fitness import score_NTK, score_linear, n_params
-from fne.evolution.utils import get_memory, print_, clear_cache
+from fne.evolution.fitness import score_NTK, score_jacob, n_params, score_activations
+from fne.evolution.utils import get_memory, print_, clear_cache, correct_genotype
 
+import os
+
+from fne.genotopheno.network import EvaluationNetwork
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
+### how many time test the same model
+repeat = 4
 
 
 # dataset
@@ -43,18 +52,13 @@ def get_random_net(n_classes):
     search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
                     'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
     genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7'
-    mutator = Mutations(search_space, prob_mutation=0.8,
-                        prob_resize=0.4, prob_swap=0.6)
+    mutator = Mutations(search_space, prob_mutation=0.4,
+                        prob_resize=0.3, prob_swap=0.4)
     for i in range(6):
         genotype = mutator(genotype)
-    """
-    net = nn.Sequential(
-        LearnableCell(3, genotype, search_space),
-        nn.AdaptiveAvgPool2d(1),
-        nn.Linear(c_out, n_classes)
-    )
-    """
-    net = VisionNetwork(3, n_classes, [genotype], search_space, 1)
+    genotype = genotype[:6]+'0'+genotype[7:]
+    genotype = correct_genotype(genotype)
+    net = EvaluationNetwork(3, n_classes, [genotype], search_space)
     return net
 
 # famous networks
@@ -107,65 +111,70 @@ print('Done')
 
 def get_scores(model):
     s1 = score_NTK(loader, model, device, 20)
-    s2 = score_linear(loader, model, device, 20)
-    s3 = s1*s2*torch.log(n_params(model)).item()
-    return s1, s2, s3
+    s2 = score_jacob(loader, model, device) * s1 * np.log(n_params(model))
+    s3 = score_activations(loader, model, device)
+    return float(s1), float(s2), float(s3)
 
+filename = 'scores_results.json'
+if filename not in os.listdir('.'):
+    # test models
+    n_models = 5 + 3 + 3
+    print_('getting scores:          0% ')
+    n_classes = 10
 
-# test models
-repeat = 4
-n_models = 5 + 3 + 3
-print_('getting scores:          0% ')
-n_classes = 10
-
-rand_scores = []
-loader = torch.utils.data.DataLoader(dataset, 8,  True) # custom batch size because some models use too much memory
-for i in range(5):
-    for _ in range(repeat):
-        clear_cache()                                   # clean GPU RAM
-        model = get_random_net(n_classes).to(device)    # load model
-        rand_scores.append(get_scores(model))           # score the model
+    rand_scores = []
+    loader = torch.utils.data.DataLoader(dataset, 8,  True) # custom batch size because some models use too much memory
+    for i in range(5):
+        for _ in range(repeat):
+            clear_cache()                                   # clean GPU RAM
+            model = get_random_net(n_classes).to(device)    # load model
+            rand_scores.append(get_scores(model))           # score the model
         print_(f'{int(100*(i+1)/n_models)}% ')          # print run %
 
 
-popular_scores = []
-loader = torch.utils.data.DataLoader(dataset, 1,  True)
-for i, getter in enumerate([get_alexnet, get_resnet, get_vgg]):
-    for _ in range(repeat):
-        clear_cache()
-        model = getter(n_classes).to(device)
-        popular_scores.append(get_scores(model))
-    print_(f'{int(100*(i+6)/n_models)}% ')
+    popular_scores = []
+    loader = torch.utils.data.DataLoader(dataset, 1,  True)
+    for i, getter in enumerate([get_alexnet, get_resnet, get_vgg]):
+        for _ in range(repeat):
+            clear_cache()
+            model = getter(n_classes).to(device)
+            popular_scores.append(get_scores(model))
+        print_(f'{int(100*(i+6)/n_models)}% ')
 
 
-hand_scores = []
-loader = torch.utils.data.DataLoader(dataset, 8,  True)
-for i, getter in enumerate([net1, net2, net3]):
-    for _ in range(repeat):
-        clear_cache()
-        model = getter(n_classes).to(device)
-        hand_scores.append(get_scores(model))
-    print_(f'{int(100*(i+9)/n_models)}% ')
+    hand_scores = []
+    loader = torch.utils.data.DataLoader(dataset, 8,  True)
+    for i, getter in enumerate([net1, net2, net3]):
+        for _ in range(repeat):
+            clear_cache()
+            model = getter(n_classes).to(device)
+            hand_scores.append(get_scores(model))
+        print_(f'{int(100*(i+9)/n_models)}% ')
 
-# scores
-scores = [rand_scores, popular_scores, hand_scores]
-vals = rand_scores+popular_scores+hand_scores
+    # scores
+    scores = [rand_scores, hand_scores, popular_scores]
+
+    # save results
+    with open(filename, 'w') as fout:
+        json.dump(scores, fout)
+else:
+    with open(filename, 'r') as fin:
+        scores = json.load(fin)
+
+# get rid of eventual outliers
+vals = scores[0]+scores[1]+scores[2]
 minmax, perc = [], int(len(vals)/5)
 for i in range(3):
     vals.sort(key=lambda x: x[i])
     diff = (vals[-perc][i]-vals[perc][i])/10
-    minmax.append([vals[perc][i]-diff, vals[-perc][i]+diff])
+    minmax.append([vals[0][i]-diff, vals[-perc][i]+diff])
 
-
-# save results
 print('\n', scores)
-with open('results.txt', 'w') as fout:
-    fout.write(str(scores))
+
 
 # plot first 2 scores
-colors = ['r', 'g', 'b']
-labels = ['random architecture',
-          'popular architecture', 'average architecture']
+colors = ['mediumspringgreen', 'deepskyblue', 'steelblue']
+labels = ['random architecture', 'average architecture','popular architecture',]
 
 for s, c, l in zip(scores, colors, labels):
     x = [v[0] for v in s]
@@ -174,9 +183,8 @@ for s, c, l in zip(scores, colors, labels):
 
 plt.title('scores for different architectures: better closer to origin')
 plt.xlabel('Neural Tangent Kernel Score')
-plt.ylabel('Linear Region Score')
-plt.xlim(minmax[0])
-plt.ylim(minmax[1])
+plt.ylabel('Difference Between Jacobians')
+plt.ylim([minmax[1][0], minmax[1][1]/2])
 plt.legend()
 plt.show()
 
@@ -189,10 +197,42 @@ for s, c, l in zip(scores, colors, labels):
     count += len(s)
 
 plt.title('relation between architectures and the third score')
-plt.ylabel('score1*score2*n_params')
+plt.ylabel('Linear Region Score')
 plt.ylim(minmax[2])
 plt.legend()
 plt.show()
+
+
+fig = plt.figure()
+ax = Axes3D(fig, auto_add_to_figure=False)
+fig.add_axes(ax)
+
+
+for s, c, l in zip(scores, colors, labels):
+    x = [(v[0]-minmax[0][0])/(minmax[0][1]-minmax[0][0]) for v in s]
+    y = [(v[1]-minmax[1][0])/(minmax[1][1]-minmax[1][0]) for v in s]
+    z = [(v[2]-minmax[2][0])/(minmax[2][1]-minmax[2][0]) for v in s]
+
+    sizes = []
+    for v in s:
+        tot=5
+        for v2 in vals:
+            tot+= int(v[0]<v2[0])+int(v[1]<v2[1])+int(v[2]<v2[2])
+        sizes.append(float(tot))
+
+    ax.scatter(x,y,z, s=sizes, c=c, label=l)
+ax.scatter([0],[0],[0], s=120, c='black')
+
+ax.set_xlabel('NTK')
+ax.set_ylabel('Jacob')
+ax.set_zlabel('Regions')
+
+plt.xlim([0, 1])
+plt.ylim([0, 1])
+ax.set_zlim3d([0, 1])
+plt.legend()
+plt.show()
+
 
 """   NN  popular scores
 

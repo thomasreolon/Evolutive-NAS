@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from .genotopheno import LearnableCell, VisionNetwork
+from .genotopheno import LearnableCell, DARTSNetwork
 from .evolution import get_dataset, correct_genotype, Crossover, Mutations, fitness_score
 from .evolution.utils import clear_cache, get_memory
 
@@ -210,7 +210,7 @@ class Population():
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # GPU memory info
-        network = VisionNetwork(
+        network = DARTSNetwork(
             self.config.C_in, self.config.n_classes, self.population, self.config.search_space, depth)
         n_params = sum([p.numel() for p in network.parameters()])
         w = self.dataset[0][0].shape[2]
@@ -247,7 +247,7 @@ class Population():
                 param_group['lr'] = param_group['lr']*(.5 + float(tot_loss/cc < prev_loss)*2.5)
             prev_loss = tot_loss/cc
 
-        # whole trainingset can be too expensive
+        # now let's see how alphas are changed
         network.alphas.requires_grad = True
         optimizer = torch.optim.Adam(network.parameters(), lr=.004, weight_decay=1e-5)
         small_dataset = get_dataset(9, self.dataset, self.config.max_distance, self.config.distance)
@@ -265,7 +265,7 @@ class Population():
         if verbose: print('alphas:',network.alphas.tolist())
 
         # lower alphas --> high -log_softmax --> more inportance in the network
-        _, results = network.alphas.min(dim=1)
+        _, results = network.alphas.max(dim=1)
         pop = []
         for i in range(self.config.pop_size):
             pop.append(self.population[i*t_size+int(results[i])])
