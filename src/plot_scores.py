@@ -56,7 +56,6 @@ def get_random_net(n_classes):
                         prob_resize=0.3, prob_swap=0.4)
     for i in range(6):
         genotype = mutator(genotype)
-    genotype = genotype[:6]+'0'+genotype[7:]
     genotype = correct_genotype(genotype)
     net = EvaluationNetwork(3, n_classes, [genotype], search_space)
     return net
