@@ -189,7 +189,8 @@ def score_activations(dataloader: DataLoader, neural_net: torch.nn.Module, devic
             s.append(ld)
         # average over some batches
         score = np.mean(s)
-    ## we want to minimize, so negative
+
+    if score < 0: score = 1e10 # many skipconnections make stange effects
     return score
 
 

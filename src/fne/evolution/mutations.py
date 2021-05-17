@@ -1,7 +1,6 @@
-from collections import defaultdict
 import torch
+import random
 from .utils import get_conf, encode_conf
-
 
 class Mutations():
     def __init__(self, search_space, prob_mutation=0.8, prob_resize=0.05, prob_swap=0.04, exploration_vs_exploitation=0.5):
@@ -32,11 +31,13 @@ class Mutations():
         mutations = []
 
         # azzerate smallest entry at level 0
-        if torch.rand(1)<self.prob_mutation/2:
-            k, min_= 0, 9999
+        while torch.rand(1)<self.prob_mutation:
+            k, min_, cc= 0, 9999, 0
             for i, val in enumerate(architecture[0]):
+                if val>0: cc+=1
                 if val<min_ and val>0: k, min_= i, val
-            architecture[0][k] = 0
+            if cc> len(architecture[0])/2:
+                architecture[0][k] = 0
 
 
         # update architecture edges
@@ -69,10 +70,10 @@ class Mutations():
         eve = self.exploration_vs_exploitation
         rand = torch.rand(3)
         i = int(rand[0] * len(architecture))
-        j = int(rand[1] * len(architecture[0]))
-        #                    exploitation                                       exploration
-        var = (1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max())
-        architecture[i][j]  += int((var-0.12)*rand[2]*16)*5
+        #                              exploitation                                       exploration
+        weights = [(1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max()) for j in range(len(self.sspace_used))]
+        j = random.choices(list(range(len(architecture[0]))) , weights=weights, k=1)[0]
+        architecture[i][j]  += 1+int(rand[2]*20)
         return architecture, j
 
     def mutate_resize(self, architecture):

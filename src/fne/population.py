@@ -55,8 +55,8 @@ class Config():
         self.max_distance = c.max_distance
         # mutation params
         self.mut_prob = c.mut_prob or .8
-        self.mut_resize = c.mut_resize or .05
-        self.mut_swap = c.mut_swap or .04
+        self.mut_resize = c.mut_resize or .3
+        self.mut_swap = c.mut_swap or .5
         self.mut_eve = c.mut_eve or .5
         # crossover params
         self.cross_prob = c.cross_prob or .3
