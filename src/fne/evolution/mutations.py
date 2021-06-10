@@ -26,7 +26,7 @@ class Mutations():
         """
         takes a genotype and returns a mutated one
         """
-        self.exploration_vs_exploitation *= 0.99
+        self.exploration_vs_exploitation *= 0.996
         architecture, use_shared, dataset = get_conf(genotype)
         mutations = []
 
@@ -49,11 +49,12 @@ class Mutations():
         # update hyperparams
         r = torch.rand(2)
         if r[0]<0.04: use_shared = (use_shared+1)%2
-        if r[1]<0.04: dataset = int((dataset+(r[1]-0.01)*50)%10)
+        if r[1]<0.24: dataset = int((dataset+(r[1]-0.01)*50)%10)
 
         # resize architecture
-        architecture, tmp = self.mutate_resize(architecture)
-        mutations += tmp
+        if (torch.rand(1)<self.prob_mutation):
+            architecture, tmp = self.mutate_resize(architecture)
+            mutations += tmp
 
         hash_arch = '.'.join([','.join([str(x) for x in ar]) for ar in architecture])
         self._cache[hash_arch] = mutations
@@ -69,11 +70,17 @@ class Mutations():
         """
         eve = self.exploration_vs_exploitation
         rand = torch.rand(3)
-        i = int(rand[0] * len(architecture))
         #                              exploitation                                       exploration
         weights = [(1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max()) for j in range(len(self.sspace_used))]
+        
         j = random.choices(list(range(len(architecture[0]))) , weights=weights, k=1)[0]
-        architecture[i][j]  += 1+int(rand[2]*20)
+
+        i = int(rand[0] * len(architecture))
+        for k, block in enumerate(architecture):
+            if block[j]>0 and torch.rand(1)>.3:
+                i = k
+        
+        architecture[i][j]  += 2**int(rand[2]*6)
         return architecture, j
 
     def mutate_resize(self, architecture):
@@ -81,9 +88,9 @@ class Mutations():
         architecture = torch.tensor(architecture, dtype=torch.int)
         n_params = float(architecture.sum())
         mutations = []
-        prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4) # reduce prob   3/4 gives a bit more prob to increase rather than reduce
-        prob2 = self.avg_len / (n_params+self.avg_len) * self.prob_resize  # increase prob
-        depth = int((len(architecture)*2)**0.5)                            # network depth
+        prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4)   # reduce prob   3/4 gives a bit more prob to increase rather than reduce
+        prob2 = self.avg_len / (n_params/4+self.avg_len) * self.prob_resize  # increase prob
+        depth = int((len(architecture)*2)**0.5)                              # network depth
         if len(architecture)>1 and torch.rand(1)<prob:
             # reduce the cell by one layer, sum the removed layers to the previous ones
             if depth > 1:
@@ -98,7 +105,7 @@ class Mutations():
             n = len(architecture[0])
             new_arch = [[0]*n]*(depth+1)
             j = int(torch.rand(1)*n)
-            new_arch[-1][j] += 3
+            new_arch[-1][j] += 16
             mutations.append(j)
             while(torch.rand(1)>self.prob_mutation):
                 new_arch, j = self.mutate_one_edge(new_arch)

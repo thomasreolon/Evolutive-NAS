@@ -29,15 +29,15 @@ class SepConv(nn.Module):
 
 
 class Linearize(nn.Module):
-    def __init__(self, kernel_size, mode, C_in, C_out, stride, affine):
+    def __init__(self, kernel_size, mode, C_in, n_lin, stride, affine):
         super().__init__()
+        C_out = int(n_lin/16)
         self.layers = nn.Sequential(
             nn.ReLU(inplace=False),
             nn.Conv2d(C_in, C_out, kernel_size, stride=stride,
                       padding=0, dilation=1, bias=False),
             nn.BatchNorm2d(C_out, affine=affine),
-            nn.AdaptiveAvgPool2d(
-                1) if mode == 'avg' else nn.AdaptiveMaxPool2d(1)
+            nn.AdaptiveAvgPool2d(4) if mode == 'avg' else nn.AdaptiveMaxPool2d(4)
         )
 
     def forward(self, x):
@@ -51,14 +51,14 @@ class ConvLinConv(nn.Module):
         self.C_in = C_in
         self.C_out = C_out
         if is_3x3:
-            lin_size, kernel = 128, (3, 3)
+            lin_size, kernel = 64, (3, 3)
             self.tolinear = Linearize(kernel, 'avg', C_in, lin_size, 1, affine)
         else:
-            lin_size, kernel = 512, (7, 7)
-            self.tolinear = Linearize(kernel, 'avg', C_in, lin_size, 5, affine)
+            lin_size, kernel = 128, (7, 7)
+            self.tolinear = Linearize(kernel, 'max', C_in, lin_size, 5, affine)
         self.layer = nn.Linear(lin_size, C_out)
-        self.conv = nn.Conv2d(C_in, C_out, kernel_size=kernel,
-                              padding=int(kernel[0]/2), stride=stride)
+        self.conv = nn.Conv2d(C_in, C_out, kernel_size=1,
+                              padding=0, stride=stride)
 
     def forward(self, x):
         l = self.tolinear(x)

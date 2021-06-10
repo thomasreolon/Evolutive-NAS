@@ -15,16 +15,14 @@ def fitness_score(genotype, C_in, search_space, original_dataset, max_distance, 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     neural_net = LearnableCell(C_in, genotype, search_space).to(device)
     dataset = get_dataset(dataset, original_dataset, max_distance, distance)
-    loader = DataLoader(dataset, batch_size=64)
+    loader = DataLoader(dataset, batch_size=16)
 
     # sometimes it fails & i have no idea why
     try:
         score1 = score_NTK(loader, neural_net, device)
     except Exception as e:
         score1 = 1e10
-
-    score2 = score_jacob(loader, neural_net, device)
-
+    score2 = score_jacob(loader, neural_net, device)  * score1 * np.log(n_params(neural_net))
     score3 = score_activations(loader, neural_net, device)
 
     return (score1, score2, score3)
@@ -86,7 +84,7 @@ def score_NTK(dataloader: DataLoader, neural_net: torch.nn.Module, device, sampl
 
 
 # https://github.com/BayesWatch/nas-without-training/blob/8ba0313ea1b6038e6d0c6822031a100135715e2a/score_networks.py
-def score_jacob(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=40):
+def score_jacob(dataloader: DataLoader, neural_net: torch.nn.Module, device, samples_to_use=10):
     """fitted nets minimize this score (the lowest the best)"""
     neural_net.eval()
 
@@ -135,9 +133,10 @@ def score_jacob(dataloader: DataLoader, neural_net: torch.nn.Module, device, sam
             K[j, i] = corr
 
     # determinant to summarize
+    K = K / torch.diag(K)
     _, ld = np.linalg.slogdet(K.cpu().numpy())
     score = np.nan_to_num(ld, copy=True, nan=100000.0)
-    return score
+    return np.abs(score)
 
 
 def n_params(neural_net: torch.nn.Module):
@@ -190,7 +189,6 @@ def score_activations(dataloader: DataLoader, neural_net: torch.nn.Module, devic
         # average over some batches
         score = np.mean(s)
 
-    if score < 0: score = 1e10 # many skipconnections make stange effects
-    return score
+    return -score
 
 

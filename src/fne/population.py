@@ -94,6 +94,7 @@ class Population():
             self.population = initial_population
         else:
             self.population = self.get_rand(cnf.pop_size)
+        self.scores = None
         self.best_offspring = self.population[0]
 
         # initialize crossover and mutation classes (they will learn parameters through epochs)
@@ -170,7 +171,8 @@ class Population():
 
         # select n offsprings
         self.population = [geno for geno, _ in scores[:n]]
-        self.best_offspring = self.population[0]
+        self.scores     = [score for _, score in scores[:n]]
+        self.best_offspring = scores[0]
         random.shuffle(self.population)
 
         # update parameters for mutation & crossover
@@ -185,6 +187,9 @@ class Population():
         tot = {s:0 for s in scores}
         # score = sum of the rank
         # the lower the better
+        longest = (None, 0)
+        for x in scores:
+            if len(x[0]) >longest[1]: longest = (x, len(x[0]))
         for k in range(3):
             scores.sort(key=lambda x: x[1][k])
             for i,s in enumerate(scores):
@@ -192,6 +197,7 @@ class Population():
         tot = list(tot.items())
         # sort by rank
         tot.sort(key=lambda x: x[1])
+        tot[-1] = longest
         return [s for s,_ in tot]
 
 
