@@ -13,13 +13,12 @@ import torchvision.transforms as transforms
 import numpy as np
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D, axes3d
+from mpl_toolkits.mplot3d import Axes3D
 import json, os
 
-from fne.genotopheno import LearnableCell, DARTSNetwork
 from fne.evolution import Mutations
 from fne.evolution.fitness import score_NTK, score_jacob, n_params, score_activations
-from fne.evolution.utils import get_memory, print_, clear_cache, correct_genotype
+from fne.evolution.utils import print_, clear_cache, correct_genotype
 
 import os
 
@@ -28,7 +27,6 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 ### how many time test the same model
 repeat = 4
-
 
 # dataset
 
@@ -50,14 +48,18 @@ def get_random_net(n_classes):
     get a NN from a randomly mutated genotype
     """
     search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
-                    'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
-    genotype = '0|0|2|0|0|2|0|0  1|0|0|1|1|0|0|0  0|1|0|0|0|0|2|1--1  7'
-    mutator = Mutations(search_space, prob_mutation=0.4,
-                        prob_resize=0.3, prob_swap=0.4)
-    for i in range(6):
-        genotype = mutator(genotype)
-    genotype = correct_genotype(genotype)
-    net = EvaluationNetwork(3, n_classes, [genotype], search_space)
+                    'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
+    nparam = 1e6
+    while (nparam>=1e6):
+        genotype = '0|0|2|0|0|2|0  1|0|0|1|1|0|0  0|1|0|0|0|0|2--1  7'
+        mutator = Mutations(search_space, prob_mutation=0.4,
+                            prob_resize=0.3, prob_swap=0.4)
+        for i in range(6):
+            genotype = mutator(genotype)
+        genotype = correct_genotype(genotype)
+        net = EvaluationNetwork(3, n_classes, [genotype], search_space)
+        nparam = sum(p.numel() for p in net.parameters())
+    clear_cache()
     return net
 
 # famous networks
@@ -112,7 +114,7 @@ def get_scores(model):
     s1 = score_NTK(loader, model, device, 20)
     s2 = score_jacob(loader, model, device) * s1 * np.log(n_params(model))
     s3 = score_activations(loader, model, device)
-    return float(s1), float(s2), float(s3)
+    return float(s1), float(s2), float(-s3)
 
 filename = 'scores_results.json'
 if filename not in os.listdir('.'):
@@ -183,6 +185,7 @@ for s, c, l in zip(scores, colors, labels):
 plt.title('scores for different architectures: better closer to origin')
 plt.xlabel('Neural Tangent Kernel Score')
 plt.ylabel('Difference Between Jacobians')
+plt.xlim([minmax[0][0], minmax[0][1]/2])
 plt.ylim([minmax[1][0], minmax[1][1]/2])
 plt.legend()
 plt.show()
