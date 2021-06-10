@@ -3,8 +3,8 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
-if 'cifar_results2.txt' in os.listdir('.'):
-    with open('cifar_results2.txt', 'r') as fin:
+if 'cifar_results.txt' in os.listdir('.'):
+    with open('cifar_results.txt', 'r') as fin:
         data = json.load(fin)
         scores = data['scores']
         besties = data['best_per_epoch']
@@ -59,14 +59,16 @@ colors = get_colors(len(best_offsprings_per_epoch))
 labels = [f'epoch {i+1}' for i in range(len(best_offsprings_per_epoch))] 
 
 sizes = []
+max_activ = 0
 for v in best_offsprings_per_epoch:
+    max_activ = max(max_activ, -v[2]+20)
     tot=5
     for v2 in best_offsprings_per_epoch:
         tot+= int(v[0]<=v2[0])+int(v[1]<=v2[1])+int(v[2]<=v2[2])
     sizes.append(float(tot))
 
 for i,( s, c, l) in enumerate(zip(best_offsprings_per_epoch, colors, labels)):
-    x, y, z = [s[0]], [s[1]], [s[2]]
+    x, y, z = [s[0]], [s[1]], [max_activ+s[2]]
 
     if i%int(len(best_offsprings_per_epoch)/3)==0:
         ax.scatter(x,y,z, s=sizes[i], c=c, label=l)

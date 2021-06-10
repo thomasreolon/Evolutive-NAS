@@ -1,11 +1,11 @@
 import torch
-from torch import optim
 import torchvision
 import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from fne.genotopheno import EvaluationNetwork
+from fne.evolution.utils import clear_cache
 
 import os, json
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -23,9 +23,14 @@ name='results_nn_ga.pth'
 # NN setup
 if name=='results_nn_ga.pth':
     with open('cifar_results.txt', 'r') as fin:
-        population = json.load(fin)['final_population']
-    search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7', 'skip_connect', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
+        population = json.load(fin)['populations'][-1]
+        population.sort(key=lambda x: len(x))
+        population = population[:2]
+    print(population)
+    
+    search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
     neural_net   = EvaluationNetwork(3, 10, population, search_space)
+    print(sum(p.numel() for p in neural_net.parameters()))
     if name in os.listdir('.'):
         neural_net.load_state_dict(torch.load(name))
 else:
@@ -37,8 +42,8 @@ else:
 neural_net = neural_net.to('cuda')
 
 # loader, loss, ...
-train_loader = DataLoader(trainset, 256, True)
-optimizer    = torch.optim.Adam(neural_net.parameters(), weight_decay=1e-5)
+train_loader = DataLoader(trainset, 64, True)
+optimizer    = torch.optim.Adam(neural_net.parameters(), lr=.02, weight_decay=1e-5)
 loss_fn      = nn.CrossEntropyLoss()
 
 losses = [1.]
@@ -60,19 +65,21 @@ for e in range(30):
     print(f'loss epoch {e}: {losses[-1]:.3e}')
 
     torch.save(neural_net.state_dict(), 'trained-'+name)
+    clear_cache()
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = param_group['lr']*(1. + (losses[-2]-losses[-1])/losses[-2])
 
 
 # test set 
+print('testing...')
 transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 testset  = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-test_loader = DataLoader(testset, 256, True)
+test_loader = DataLoader(testset, 16, True)
 
 CM = torch.zeros((10,10))
 neural_net.eval()
-for inps, targs in train_loader:
+for inps, targs in test_loader:
         inps = inps.cuda()
         outs = neural_net(inps)
         _, outs = outs.max(dim=1)

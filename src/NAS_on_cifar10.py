@@ -41,7 +41,7 @@ trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True
 
 if 'cifar_results.txt' in os.listdir('.'):
     with open('cifar_results.txt', 'r') as fin:
-        init_pop = json.load(fin)['final_population']
+        init_pop = json.load(fin)['populations'][-1]
 else:
     init_pop=[0]*3
     init_pop[0] = '8|0|0|0|0|0|0  0|0|0|16|0|0|0  0|16|16|0|0|0|32  0|0|0|0|0|0|0   32|0|0|0|0|0|0  32|0|0|0|0|0|0  0|0|0|0|0|0|0  0|0|0|0|0|0|0   0|0|0|0|0|0|64  0|0|0|0|64|0|64--1  7'
@@ -52,7 +52,7 @@ else:
 pop = Population(trainset, settings, initial_population=init_pop)
 
 best, populations, scores = [], [], []
-for i in range(48):
+for i in range(6):
     if i%4==2:
         pop.do_evolution_step(True, True)
     elif i%4==3:

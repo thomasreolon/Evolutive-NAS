@@ -70,9 +70,9 @@ class Mutations():
         """
         eve = self.exploration_vs_exploitation
         rand = torch.rand(3)
-        #                              exploitation                                       exploration
-        weights = [(1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max()) for j in range(len(self.sspace_used))]
-        
+        #                           exploitation                                       exploration
+        weights = [(1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max())+.2 for j in range(len(self.sspace_used))]
+
         j = random.choices(list(range(len(architecture[0]))) , weights=weights, k=1)[0]
 
         i = int(rand[0] * len(architecture))
@@ -89,7 +89,8 @@ class Mutations():
         n_params = float(architecture.sum())
         mutations = []
         prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4)   # reduce prob   3/4 gives a bit more prob to increase rather than reduce
-        prob2 = self.avg_len / (n_params/4+self.avg_len) * self.prob_resize  # increase prob
+        prob2 = self.avg_len / (n_params/2+self.avg_len) * self.prob_resize  # increase prob
+        prob2 += (len(architecture)**(1/2))/7
         depth = int((len(architecture)*2)**0.5)                              # network depth
         if len(architecture)>1 and torch.rand(1)<prob:
             # reduce the cell by one layer, sum the removed layers to the previous ones
