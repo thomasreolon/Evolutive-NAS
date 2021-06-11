@@ -88,30 +88,32 @@ class Mutations():
         architecture = torch.tensor(architecture, dtype=torch.int)
         n_params = float(architecture.sum())
         mutations = []
-        prob = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4)   # reduce prob   3/4 gives a bit more prob to increase rather than reduce
-        prob2 = self.avg_len / (n_params/2+self.avg_len) * self.prob_resize  # increase prob
-        prob2 += (len(architecture)**(1/2))/7
+        prob_reduce = n_params / (n_params+self.avg_len) * (self.prob_resize*3/4)   # reduce prob   3/4 gives a bit more prob to increase rather than reduce
+        prob_reduce += len(architecture)/100
+        prob_increase = self.avg_len / (n_params*(3/4)+self.avg_len) * self.prob_resize  # increase prob
         depth = int((len(architecture)*2)**0.5)                              # network depth
-        if len(architecture)>1 and torch.rand(1)<prob:
+        if len(architecture)>1 and torch.rand(1)<prob_reduce:
             # reduce the cell by one layer, sum the removed layers to the previous ones
             if depth > 1:
                 end = int(depth*(depth-1)/2)
                 for i in range(len(architecture)-end):
-                    architecture[i] += ((architecture[i]+architecture[i+end])/2).int()
-                    mutations.append(architecture[i+end].max(dim=0)[1].item())
+                    if (torch.rand(1)<.3):
+                        architecture[i] += ((architecture[i]+architecture[i+end])/2).int()
+                        mutations.append(architecture[i+end].max(dim=0)[1].item())
                 architecture = architecture[:end]
-        elif torch.rand(1)<prob2:
+        elif torch.rand(1)<prob_increase:
             # add a new layer and apply some mutations to it
             # poss. problem:   small new layer --> bottleneck --> low scores
             n = len(architecture[0])
-            new_arch = [[0]*n]*(depth+1)
+            new_arch = [[0]*n for _ in range(depth+1)]
             j = int(torch.rand(1)*n)
             new_arch[-1][j] += 16
             mutations.append(j)
-            while(torch.rand(1)>self.prob_mutation):
+            while(torch.rand(1)<self.prob_mutation):
                 new_arch, j = self.mutate_one_edge(new_arch)
                 mutations.append(j)
             architecture = torch.cat((architecture, torch.tensor(new_arch, dtype=torch.int)), dim=0)
+        n_params = float(architecture.sum())
 
         self.avg_len = .9*self.avg_len + .1*n_params
         return architecture.tolist(), mutations

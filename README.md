@@ -29,9 +29,9 @@ ___
     |    ├── NAS_on_cifar10         [launch GA on cifar10]
 
 
-## Report 
+## Report  :zap::zap:
 
-you can find the pdf (wich has the same content but with images) here: [report.pdf](report.pdf)
+**you can find the pdf (wich has the same content but with images) here: [report.pdf](report.pdf)**
 
 ___
 
@@ -127,7 +127,3 @@ Intuition: A neural network has a good potential if there is a lot of variance b
 
 
 Intuition: A neural network would appreciate if the activations of different inputs were different between each other. This score measures these dissimilarities by computing a matrix \(M\) where \(M_{ij}\) is “how many activations have the same score between sample i and sample j”. If \(M\) is a diagonal matrix the determinant is maximized and the activation are very different between each other (\(score = -log(determinant)\)). More: .
-
-#### Third Score
-
-

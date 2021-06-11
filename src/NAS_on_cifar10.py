@@ -52,7 +52,7 @@ else:
 pop = Population(trainset, settings, initial_population=init_pop)
 
 best, populations, scores = [], [], []
-for i in range(6):
+for i in range(12):
     if i%4==2:
         pop.do_evolution_step(True, True)
     elif i%4==3:
@@ -67,5 +67,5 @@ for i in range(6):
 
     with open('cifar_results.txt', 'w') as fout:
         res={'best_per_epoch':best, 'populations':populations, 'scores':scores}
-        json.dump(res, fout)
+        json.dump(res, fout, indent=2)
 

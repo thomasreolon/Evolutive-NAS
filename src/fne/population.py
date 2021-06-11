@@ -265,7 +265,6 @@ class Population():
             outs = network(inps)
             loss = loss_fn(outs, targs)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(network.parameters(), 2.)
             optimizer.step()
             optimizer.zero_grad()
         if verbose: print('alphas:',network.alphas.tolist())

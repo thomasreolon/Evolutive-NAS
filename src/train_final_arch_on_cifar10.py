@@ -32,6 +32,7 @@ if name=='results_nn_ga.pth':
     neural_net   = EvaluationNetwork(3, 10, population, search_space)
     print(sum(p.numel() for p in neural_net.parameters()))
     if name in os.listdir('.'):
+        print('loading_checkpoint')
         neural_net.load_state_dict(torch.load(name))
 else:
     name = 'results_nn_res.pth'
@@ -48,7 +49,7 @@ loss_fn      = nn.CrossEntropyLoss()
 
 losses = [1.]
 neural_net.train()
-for e in range(30):
+for e in range(3):
     tot_loss, cc = 0, 0
     for inps, targs in train_loader:
         inps, targs = inps.cuda(), targs.cuda()
@@ -68,7 +69,7 @@ for e in range(30):
     clear_cache()
 
     for param_group in optimizer.param_groups:
-        param_group['lr'] = param_group['lr']*(1. + (losses[-2]-losses[-1])/losses[-2])
+        param_group['lr'] = param_group['lr']*(0.99 + (losses[-2]-losses[-1])/losses[-2])
 
 
 # test set 
@@ -77,18 +78,20 @@ transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.5,
 testset  = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 test_loader = DataLoader(testset, 16, True)
 
-CM = torch.zeros((10,10))
-neural_net.eval()
-for inps, targs in test_loader:
-        inps = inps.cuda()
-        outs = neural_net(inps)
-        _, outs = outs.max(dim=1)
-        for i,j in zip(targs, outs):
-            CM[i,j] += 1.
+for k, loader in enumerate((test_loader, train_loader)):
+    CM = torch.zeros((10,10))
+    neural_net.eval()
+    for inps, targs in loader:
+            inps = inps.cuda()
+            outs = neural_net(inps)
+            _, outs = outs.max(dim=1)
+            for i,j in zip(targs, outs):
+                CM[i,j] += 1.
 
-recalls = torch.diag(CM)/CM.sum(dim=1)
-accuracy = torch.trace(CM)/CM.sum()
+    recalls = torch.diag(CM)/CM.sum(dim=1)
+    accuracy = torch.trace(CM)/CM.sum()
 
-print('RECALLS', recalls.tolist(), '\n\nACCURACY', accuracy.item())
+    print(k and "trainset" or "testset")
+    print('\nRECALLS', recalls.tolist(), '\nACCURACY', accuracy.item(), '\n')
 
 
