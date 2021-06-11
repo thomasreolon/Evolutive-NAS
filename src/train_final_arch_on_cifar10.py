@@ -49,7 +49,7 @@ loss_fn      = nn.CrossEntropyLoss()
 
 losses = [1.]
 neural_net.train()
-for e in range(3):
+for e in range(7):
     tot_loss, cc = 0, 0
     for inps, targs in train_loader:
         inps, targs = inps.cuda(), targs.cuda()
