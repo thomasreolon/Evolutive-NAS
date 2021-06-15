@@ -221,7 +221,7 @@ class Population():
         n_params = sum([p.numel() for p in network.parameters()])
         w = self.dataset[0][0].shape[2]
         free_mem  = torch.cuda.get_device_properties(0).total_memory -torch.cuda.memory_allocated(0)
-        batch_size = max(1, int(free_mem /(n_params * (w/5)**2 *4)))   # memory used by NN_activations-> nparams*ratioWidth/Kernel*sizeofFloat
+        batch_size = max(1, int(free_mem /(n_params * (w/3)**2 *4)))   # memory used by NN_activations-> nparams*ratioWidth/Kernel*sizeofFloat
         network = network.to(device)
         if verbose: print(f'n params = {n_params}, batch_size={batch_size}')
         

@@ -128,3 +128,30 @@ ax.set_zlabel('Regions')
 plt.legend()
 plt.show()
 
+################################################################################
+
+x = range(10)
+y = range(10)
+
+fig, ax = plt.subplots(nrows=3, ncols=3, figsize=(10,10))
+
+for i, row in enumerate(ax):
+    x0 = scores[0][:,i]   # --> first epoch
+    xn = scores[-1][:,i]  # --> last epoch
+    for j, col in enumerate(row):
+        y0 = scores[0][:,j]   # --> first epoch
+        yn = scores[-1][:,j]  # --> last epoch
+        col.scatter(xn,yn, c='mediumspringgreen', label='last epoch')
+        col.scatter(x0,y0, c='steelblue',         label='epoch 0')
+        
+        col.set_yscale(j!=2 and 'log' or 'linear')
+        col.set_xscale(i!=2 and 'log' or 'linear')
+        col.legend()
+
+for i in range(3):
+    scores = ['NTK', 'Jacob', 'Activ']
+    plt.setp(ax[-1, i],  xlabel=scores[i])
+    plt.setp(ax[i, 0], ylabel=scores[i])
+
+plt.tick_params()
+plt.show()
