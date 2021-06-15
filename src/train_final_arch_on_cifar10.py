@@ -4,7 +4,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from fne.genotopheno import EvaluationNetwork
+from fne.genotopheno import EvaluationNetwork, LearnableCell
 from fne.evolution.utils import clear_cache
 
 import os, json
@@ -23,14 +23,14 @@ name='results_nn_ga.pth'
 # NN setup
 if name=='results_nn_ga.pth':
     with open('cifar_results.txt', 'r') as fin:
-        population = json.load(fin)['populations'][-1]
+        population = json.load(fin)['populations'][-2]
         population.sort(key=lambda x: len(x))
-        population = population[:2]
+        population = population[:3]
     print(population)
     
     search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7', 'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}
     neural_net   = EvaluationNetwork(3, 10, population, search_space)
-    print(sum(p.numel() for p in neural_net.parameters()))
+    
     if name in os.listdir('.'):
         print('loading_checkpoint')
         neural_net.load_state_dict(torch.load(name))
@@ -40,16 +40,19 @@ else:
     neural_net.fc = nn.Linear(512, 10)
     if name in os.listdir('.'):
         neural_net.load_state_dict(torch.load(name))
-neural_net = neural_net.to('cuda')
+
+
+# print n params
+print(sum(p.numel() for p in neural_net.parameters()))
 
 # loader, loss, ...
 train_loader = DataLoader(trainset, 64, True)
-optimizer    = torch.optim.Adam(neural_net.parameters(), lr=.02, weight_decay=1e-5)
+optimizer    = torch.optim.Adam(neural_net.parameters(), lr=.0006, weight_decay=1e-5)
 loss_fn      = nn.CrossEntropyLoss()
 
 losses = [1.]
-neural_net.train()
-for e in range(7):
+neural_net.train().cuda()
+for e in range(20):
     tot_loss, cc = 0, 0
     for inps, targs in train_loader:
         inps, targs = inps.cuda(), targs.cuda()

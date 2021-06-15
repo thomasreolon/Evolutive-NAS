@@ -292,7 +292,7 @@ class Population():
 
     def get_rand(self, num):
         mutate = Mutations(self.config.search_space)
-        geno = '0|0|0|0|0|0|0|0--1  5'
+        geno = '|'.join(['0' for _ in range(len(self.config.search_space))]) + '--1  5'
         # random initial genotype (mutation occours with prob=self.config.mut_prob)
         pop = [mutate(geno) for _ in range(num)]
         # fixes it if the mutation had no effect

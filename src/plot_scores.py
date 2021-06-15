@@ -103,7 +103,7 @@ def net2(n_classes):
 
 
 def net3(n_classes):
-    return nn.Sequential(nn.Conv2d(3, 32, 11), nn.ReLU(inplace=True), nn.AdaptiveMaxPool2d(5), nn.Flatten(), nn.Dropout(.3), nn.Linear(32*5**2, 128), nn.ReLU(inplace=True), nn.Linear(128, n_classes), nn.Softmax(dim=0))
+    return nn.Sequential(nn.Conv2d(3, 32, 11), nn.ReLU(inplace=True), nn.AdaptiveMaxPool2d(5), nn.Flatten(), nn.Dropout(.3), nn.Linear(32*5**2, 128), nn.ReLU(inplace=True), nn.Linear(128, n_classes), nn.Softmax(dim=1))
 
 
 print('Done')
