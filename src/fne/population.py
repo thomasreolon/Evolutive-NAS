@@ -187,17 +187,14 @@ class Population():
         tot = {s:0 for s in scores}
         # score = sum of the rank
         # the lower the better
-        longest = (None, 0)
-        for x in scores:
-            if len(x[0]) >longest[1]: longest = (x, len(x[0]))
         for k in range(3):
             scores.sort(key=lambda x: x[1][k])
             for i,s in enumerate(scores):
                 tot[s] += i
+                if i==0: tot[s] -= 9999   # best per class is always kept
         tot = list(tot.items())
         # sort by rank
         tot.sort(key=lambda x: x[1])
-        tot[-1] = longest
         return [s for s,_ in tot]
 
 
