@@ -39,7 +39,6 @@ class Mutations():
             if cc> len(architecture[0])/2:
                 architecture[0][k] = 0
 
-
         # update architecture edges
         if (torch.rand(1)<self.prob_mutation):
             architecture, j = self.mutate_one_edge(architecture)
@@ -114,9 +113,6 @@ class Mutations():
             j = int(torch.rand(1)*n)
             new_arch[-1][j] += 16
             mutations.append(j)
-            while(torch.rand(1)<self.prob_mutation):
-                new_arch, j = self.mutate_one_edge(new_arch)
-                mutations.append(j)
             architecture = torch.cat((architecture, torch.tensor(new_arch, dtype=torch.int)), dim=0)
         n_params = float(architecture.sum())
 
