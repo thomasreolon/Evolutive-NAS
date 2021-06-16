@@ -12,11 +12,11 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 settings = Config()
 settings.max_distance = 10
-settings.offsprings = 25
-settings.pop_size = 3
+settings.offsprings = 30
+settings.pop_size = 5
 settings.tourn_size = 2
-settings.mut_resize = .55
 settings.cross_prob = .3
+settings.mut_resize = .55
 settings.mut_swap = .2
 settings.search_space = {'dil_conv_3x3', 'dil_conv_5x5', 'dil_conv_7x7',
                     'clinc_3x3', 'clinc_7x7', 'avg_pool_3x3',  'max_pool_3x3'}

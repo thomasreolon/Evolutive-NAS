@@ -69,17 +69,17 @@ class Mutations():
         Moreover, exploration_vs_exploitation makes exploitation a bit more important with time passing
         """
         eve = self.exploration_vs_exploitation
-        rand = torch.rand(4)
+        rand = torch.rand(3)
         #                           exploitation                                       exploration
         weights = [(1-eve)*(self.sspace_success[j] / self.sspace_used[j]) + eve*(1- self.sspace_used[j] / self.sspace_used.max())+.2 for j in range(len(self.sspace_used))]
 
         j = random.choices(list(range(len(architecture[0]))) , weights=weights, k=1)[0]
 
         if rand[0]<0.5:
-            i = int(rand[3] * len(architecture))       # random node
+            i = random.randint(0, len(architecture)-1)       # random node
         else:
-            i = int(len(architecture)**(1/2) * rand[3])
-            i = i+(i+1)//2                             # backbone path
+            i = random.randint(0, int((len(architecture)*2)**0.5))
+            i = (i*(i+1)//2)-1                               # backbone path
 
         for k, block in enumerate(architecture):
             if block[j]>0 and torch.rand(1)>.3:
