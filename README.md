@@ -1,10 +1,10 @@
 [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![Maintenance](https://img.shields.io/badge/Maintained%3F-No-red.svg)](https://GitHub.com/Naereen/StrapDown.js/graphs/commit-activity) [![Generic badge](https://img.shields.io/badge/python-3.7%20|%203.8-blue.svg)](https://shields.io/) [![Generic badge](https://img.shields.io/badge/version-v1.0-cc.svg)](https://shields.io/)
 
-# Neural Architecture Search with Genetic Algorithms
+# Neural Architecture Search with Evolutionary Algorithms
 
 Hi! this is the project for the BIO-inspired Artificial Intelligence course at unitn.
 
-TL;DR :arrow_right: evolve Neural Network architectires using genetic algorithms (pytorch)
+TL;DR :arrow_right: evolve Neural Network architectires using evolutionary algorithms (pytorch)
 ___
 
 ## Project structure:
@@ -12,7 +12,7 @@ ___
     EVOLUTIVE-NAS
     ├── src
     |    ├── fne                      [library for Fast Neural Evolution]
-    |    |    ├── evolution             [Genetic Algorithm part]
+    |    |    ├── evolution             [evolutionary algorithm part]
     |    |    |    ├── crossover        [class that implements crossover between 2 genotypes]
     |    |    |    ├── dataset          [dinamically get subsets of a dataset]
     |    |    │    ├── fitness          [heuristic functions to evaluate NN trainability]
@@ -26,7 +26,7 @@ ___
     |    |
     |    |
     |    ├── plot_scores            [evaluate the heuristic functions on some NN]
-    |    ├── NAS_on_cifar10         [launch GA on cifar10]
+    |    ├── NAS_on_cifar10         [launch EA on cifar10]
 
 
 ## Report  :zap::zap:
@@ -36,20 +36,20 @@ ___
 ___
 
 
-Given the recent success of deep learning, new fields that try to improve neural networks are emerging, Neural Architecture Search (NAS) is one of them. We propose a system that can autonomously find good NN architectures using a genetic algorithm. To speedup architectures’ evaluations we use heuristic functions that do not require training the NN, and a variation of DARTS.
+Given the recent success of deep learning, new fields that try to improve neural networks are emerging, Neural Architecture Search (NAS) is one of them. We propose a system that can autonomously find good NN architectures using a evolutionary algorithm. To speedup architectures’ evaluations we use heuristic functions that do not require training the NN, and a variation of DARTS.
 
-NAS, NTK, DARTS, GA, neuroevolution
+NAS, NTK, DARTS, EA, neuroevolution
 
 ## Introduction
 
 
 is possible to embed some prior knowledge in the architecture of a neural network (NN), for example Adam Gaier et al. showed that we can build weight agnostic neural networks, which can perform tasks even without tuning their weights. Moreover many breakthroughs in deep learning came from architectural innovations, eg. the use of CNN in Alexnet (2012), skip-connections in Resnet (2016) , self-attention in Transformers (2017) , …
 
-Even if NAS has just lately become a popular topic, some very interesting approaches like NEAT had already been proposed in the past. This approach uses a genetic algorithm (GA) to evolve the architecture and the weights of a NN. More recently a variation called CoDeepNEAT suggested a way to evolve architectures with more parameters (in NEAT you evolve weights and connections, in CoDeepNEAT you evolve layers and connections between them), moreover, they evolve cells, which can be seen as small NN, and divide them into species; once the evolution phase is complete, they build the final architecture by combining these cells. In this project, we use the same cell-based approach.
+Even if NAS has just lately become a popular topic, some very interesting approaches like NEAT had already been proposed in the past. This approach uses a evolutionary algorithm (EA) to evolve the architecture and the weights of a NN. More recently a variation called CoDeepNEAT suggested a way to evolve architectures with more parameters (in NEAT you evolve weights and connections, in CoDeepNEAT you evolve layers and connections between them), moreover, they evolve cells, which can be seen as small NN, and divide them into species; once the evolution phase is complete, they build the final architecture by combining these cells. In this project, we use the same cell-based approach.
 
 Even if the literature contains many BIO-inspired algorithms to perform neural architecture search (eg. deepswarm ), the most popular approaches use other techniques such as weights sharing and network morphisms . Among these approaches a very simple ed effective method is DARTS , which can be summarized as follows: we use backpropagation to learn a parameter called alpha, which selects which connection (dense, cnn, max-pooling, ...) we should keep in our final architecture.
 
-One of the biggest issues in using GA for NAS was how to evaluate an architecture. A commonly used fitness function was the accuracy obtained by the NN after some training epochs, but even if this approach produced very good architectures it required enormous quantity of computing power (eg. AmoebanetA used weeks of GPU computing power ). Given some recently discovered properties of NN, some methods to evaluate architectures without training them were proposed , we base our approach upon these methods. In particular, we adopt the heuristic functions to replace the old accuracy fitness function.
+One of the biggest issues in using EA for NAS was how to evaluate an architecture. A commonly used fitness function was the accuracy obtained by the NN after some training epochs, but even if this approach produced very good architectures it required enormous quantity of computing power (eg. AmoebanetA used weeks of GPU computing power ). Given some recently discovered properties of NN, some methods to evaluate architectures without training them were proposed , we base our approach upon these methods. In particular, we adopt the heuristic functions to replace the old accuracy fitness function.
 
 Section II presents our method, Section III shows the obtained performances (plot of the fitness and accuracy function) and section IV contains some thoughts on this subject.
 
@@ -93,7 +93,7 @@ The main mutation strategy consists in adding some new channels in the architect
 #### SELECTION
 
 
-Once we have the 3 scores for each offspring, we select the architectures that were not dominated by others. If there are too many offsprings after this selection we further reduce their numbers with the method proposed in . This is a \((\mu+\lambda)\) GA because parents can survive multiple generations.
+Once we have the 3 scores for each offspring, we select the architectures that were not dominated by others. If there are too many offsprings after this selection we further reduce their numbers with the method proposed in . This is a \((\mu+\lambda)\) EA because parents can survive multiple generations.
 
 #### DARTS STEP
 
@@ -106,7 +106,7 @@ Once the algorithm completes the final epoch, we store the final population on a
 ## Conclusions
 
 
-work is built upon the works of Chen et al. and Mellor et al. and tries to explore the potential of applying genetic algorithms to NAS. Potentially there could still be months of work to make improvements, so the results should be taken lightly.
+work is built upon the works of Chen et al. and Mellor et al. and tries to explore the potential of applying evolutionary algorithms to NAS. Potentially there could still be months of work to make improvements, so the results should be taken lightly.
 
 There were 2 main kinds of problems encountered during this project: technical (eg. GPU-memory handling, creating NN dynamically, ...) and practical (at the beginning it was not working very well due to bad choices of possible mutations, search space (skip-connection are a bit bugged as stated in and too)).
 
