@@ -4,8 +4,9 @@
 
 TODOS for july:
 
-- [] (more scalability in DARTS step)
-- [] (try it on a real task)
+☐ more scalability in DARTS step
+
+☐ try it on a real task
 
 
 Hi! this is the project for the BIO-inspired Artificial Intelligence course at unitn.
