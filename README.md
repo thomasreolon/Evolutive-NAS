@@ -2,6 +2,12 @@
 
 # Neural Architecture Search with Evolutionary Algorithms
 
+TODOS for july:
+
+[] more scalability in DARTS step
+[] try it on a real task
+
+
 Hi! this is the project for the BIO-inspired Artificial Intelligence course at unitn.
 
 TL;DR :arrow_right: evolve Neural Network architectires using evolutionary algorithms (pytorch)
